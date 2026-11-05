@@ -13,7 +13,7 @@ const DEFAULT_CAPACITY = 30;
 const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
 
 export const ensureOpenClassrooms = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ subject: z.string().min(1).max(100) }).parse(data))
+  .validator((data) => z.object({ subject: z.string().min(1).max(100) }).parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
