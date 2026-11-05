@@ -32,6 +32,23 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
+// The anon/publishable key still verifies user JWTs, so a server configured
+// with it looks healthy — but every RLS-protected read silently returns no
+// rows (e.g. classrooms then report "Finish setting up your profile first").
+function isPublicSupabaseKey(key: string): boolean {
+  if (key.startsWith("sb_publishable_")) return true;
+  const [, payload] = key.split(".");
+  if (!payload) return false;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      role?: string;
+    };
+    return claims.role === "anon";
+  } catch {
+    return false;
+  }
+}
+
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,6 +59,13 @@ function createSupabaseAdminClient() {
       ...(!SUPABASE_SERVICE_ROLE_KEY ? ["SUPABASE_SERVICE_ROLE_KEY"] : []),
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Set these in your host's environment settings — see SETUP.md.`;
+    console.error(`[Supabase] ${message}`);
+    throw new Error(message);
+  }
+
+  if (isPublicSupabaseKey(SUPABASE_SERVICE_ROLE_KEY)) {
+    const message =
+      "Server misconfigured: SUPABASE_SERVICE_ROLE_KEY holds the public anon/publishable key. Set it to the service_role (secret) key from Supabase → Project Settings → API Keys, then redeploy.";
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }
