@@ -8,9 +8,32 @@ import { authorizeClassroom } from "@/lib/classroom-video.functions";
 import { useCloudflareRealtime } from "@/lib/use-cloudflare-realtime";
 import { cn } from "@/lib/utils";
 
+// Set while walking from this classroom into one of its private sessions, which
+// is not "leaving": the person's messages stay while that session is live.
+let steppingIntoSession: string | null = null;
+
+/** Delete my chat messages and doubts in a classroom (I am leaving it). */
+function withdrawMessages(classId: string) {
+  return supabase.rpc("withdraw_my_classroom_messages", { _classroom_id: classId }).then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/classroom/$classId")({
   ssr: false,
   component: Classroom,
+  // Any way out of the classroom — Leave, back arrow, browser back, a link —
+  // takes the person's messages with them. (Closing the tab is caught by the
+  // server-side sweep within about 90 seconds.)
+  onLeave: (match) => {
+    const classId = (match.params as { classId: string }).classId;
+    if (steppingIntoSession === classId) {
+      steppingIntoSession = null;
+      return;
+    }
+    void withdrawMessages(classId);
+  },
 });
 
 type Session = {
@@ -73,10 +96,11 @@ function Classroom() {
   const { release } = live;
   const enterSession = useCallback(
     async (sessionId: string) => {
+      steppingIntoSession = classId;
       await release();
       nav({ to: "/session/$sessionId", params: { sessionId } });
     },
-    [release, nav],
+    [release, nav, classId],
   );
 
   const error = authError ?? live.error;
@@ -84,7 +108,10 @@ function Classroom() {
     return <Failure message={error} removed={live.removed} onHome={() => nav({ to: "/home" })} />;
   }
 
-  const leave = () => void live.leave();
+  // Remove my messages first, while I still hold the seat, then leave.
+  const leave = () => {
+    void withdrawMessages(classId).then(() => live.leave());
+  };
   const total = live.peers.length + 1;
   const connected = !!session && live.status === "connected";
 

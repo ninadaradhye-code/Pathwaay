@@ -430,3 +430,48 @@ export async function leave(ticket: string) {
   if (error) throw new Error(error.message);
   return { ended: Boolean(data) };
 }
+
+// ---------------------------------------------------------------------------
+// Invites (sessions are invite-only)
+// ---------------------------------------------------------------------------
+
+/** Host only: classmates in the classroom right now who could be invited. */
+export async function listInvitable(ticket: string) {
+  const t = readTicket(ticket);
+  const { data, error } = await supabaseAdmin.rpc("list_private_session_invitees", {
+    p_session_id: t.sid,
+    p_host_id: t.uid,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({
+    userId: r.user_id,
+    name: r.name,
+    inviteStatus: (r.invite_status ?? null) as
+      "pending" | "accepted" | "declined" | "expired" | "cancelled" | null,
+    busy: Boolean(r.busy),
+  }));
+}
+
+/** Host only: invite a classmate into this session. */
+export async function invite(ticket: string, inviteeId: string) {
+  const t = readTicket(ticket);
+  const { error } = await supabaseAdmin.rpc("invite_to_private_session", {
+    p_session_id: t.sid,
+    p_host_id: t.uid,
+    p_invitee_id: inviteeId,
+    p_max: PRIVATE_SESSION_MAX,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+/** The invitee says no, from the classroom. */
+export async function declineInvite(accessToken: string, sessionId: string) {
+  const userId = await userFromToken(accessToken);
+  const { error } = await supabaseAdmin.rpc("decline_private_invite", {
+    p_session_id: sessionId,
+    p_user_id: userId,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Crown,
+  UserPlus,
   Loader2,
   Mic,
   MicOff,
@@ -59,6 +60,7 @@ function PrivateSessionPage() {
   >(null);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const classroomId = s.info?.classroomId ?? null;
 
   const backToClassroom = () => {
@@ -242,7 +244,7 @@ function PrivateSessionPage() {
             {s.peers.length === 0 && (
               <p className="mb-3 rounded-lg bg-white/5 px-4 py-3 text-center text-sm text-white/70">
                 {s.isHost
-                  ? "Waiting for someone to join and help you…"
+                  ? "This session is invite-only. Use Invite to bring in classmates from the classroom."
                   : hostPresent
                     ? "Waiting for others…"
                     : `Waiting for ${s.info?.hostName ?? "the student"} to accept your help…`}
@@ -337,6 +339,16 @@ function PrivateSessionPage() {
             label={s.camOn ? "Stop video" : "Start video"}
             icon={s.camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
           />
+          {s.isHost && s.status === "live" && (
+            <button
+              onClick={() => setInviteOpen(true)}
+              disabled={total >= PRIVATE_SESSION_MAX}
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+            >
+              <UserPlus className="h-5 w-5" />
+              <span className="hidden sm:inline">Invite</span>
+            </button>
+          )}
           {s.isHost && s.peers.some((p) => !p.hostMuted) && (
             <button
               disabled={busy}
@@ -364,6 +376,15 @@ function PrivateSessionPage() {
           </p>
         )}
       </footer>
+
+      {inviteOpen && (
+        <InviteModal
+          list={s.listInvitable}
+          invite={s.invite}
+          seatsLeft={PRIVATE_SESSION_MAX - total}
+          onClose={() => setInviteOpen(false)}
+        />
+      )}
 
       {confirm && (
         <Confirm
@@ -539,6 +560,167 @@ function Confirm({
             {action}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type Invitable = {
+  userId: string;
+  name: string;
+  inviteStatus: "pending" | "accepted" | "declined" | "expired" | "cancelled" | null;
+  busy: boolean;
+};
+
+const INVITE_NOTE: Record<NonNullable<Invitable["inviteStatus"]>, string> = {
+  pending: "Invited · waiting for an answer",
+  accepted: "Was in this session",
+  declined: "Declined",
+  expired: "Didn't answer",
+  cancelled: "",
+};
+
+/** Host only: invite classmates who are in the classroom right now. */
+function InviteModal({
+  list,
+  invite,
+  seatsLeft,
+  onClose,
+}: {
+  list: () => Promise<Invitable[]>;
+  invite: (userId: string) => Promise<void>;
+  seatsLeft: number;
+  onClose: () => void;
+}) {
+  const [people, setPeople] = useState<Invitable[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      setPeople(await list());
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load the classroom.");
+    }
+  }, [list]);
+
+  // Answers and arrivals change while the list is open.
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 4000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  const send = async (p: Invitable) => {
+    setSending(p.userId);
+    try {
+      await invite(p.userId);
+      toast.success(`Invite sent to ${p.name}`);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not send the invite.");
+    } finally {
+      setSending(null);
+    }
+  };
+
+  const shown = (people ?? []).filter((p) =>
+    p.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="flex max-h-[80dvh] w-full max-w-md flex-col rounded-2xl bg-card text-foreground shadow-elevated">
+        <div className="flex items-start gap-3 border-b border-border p-5">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold">Invite to this session</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Only people you invite can join. They get a prompt in the classroom and have 2 minutes
+              to accept.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg px-2 py-1 text-sm font-semibold hover:bg-secondary"
+          >
+            Done
+          </button>
+        </div>
+
+        {people && people.length > 6 && (
+          <div className="border-b border-border px-5 py-3">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search classmates…"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {error ? (
+            <p className="p-4 text-center text-sm text-danger">{error}</p>
+          ) : people === null ? (
+            <div className="flex justify-center p-6">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : shown.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              {people.length === 0
+                ? "Nobody else is in the classroom right now."
+                : "No classmate matches that name."}
+            </p>
+          ) : (
+            shown.map((p) => {
+              const waiting = p.inviteStatus === "pending";
+              const disabled = waiting || p.busy || seatsLeft <= 0 || sending === p.userId;
+              const note = p.busy
+                ? "In another private session"
+                : p.inviteStatus
+                  ? INVITE_NOTE[p.inviteStatus]
+                  : "";
+              return (
+                <div
+                  key={p.userId}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-secondary/60"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                    {initials(p.name)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{p.name}</p>
+                    {note && <p className="truncate text-xs text-muted-foreground">{note}</p>}
+                  </div>
+                  <button
+                    disabled={disabled}
+                    onClick={() => void send(p)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-40"
+                  >
+                    {sending === p.userId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-3.5 w-3.5" />
+                    )}
+                    {waiting
+                      ? "Invited"
+                      : p.inviteStatus && p.inviteStatus !== "cancelled"
+                        ? "Invite again"
+                        : "Invite"}
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+        {seatsLeft <= 0 && (
+          <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
+            The session is full ({PRIVATE_SESSION_MAX} people).
+          </p>
+        )}
       </div>
     </div>
   );

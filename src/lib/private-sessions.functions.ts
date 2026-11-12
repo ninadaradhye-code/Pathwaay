@@ -93,3 +93,24 @@ export const leavePrivate = createServerFn({ method: "POST" })
     const m = await import("@/lib/private-sessions.server");
     return m.leave(data.ticket);
   });
+
+export const listInvitablePrivate = createServerFn({ method: "POST" })
+  .validator((d) => z.object({ ticket }).parse(d))
+  .handler(async ({ data }) => {
+    const m = await import("@/lib/private-sessions.server");
+    return m.listInvitable(data.ticket);
+  });
+
+export const inviteToPrivate = createServerFn({ method: "POST" })
+  .validator((d) => z.object({ ticket, userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const m = await import("@/lib/private-sessions.server");
+    return m.invite(data.ticket, data.userId);
+  });
+
+export const declinePrivateInvite = createServerFn({ method: "POST" })
+  .validator((d) => z.object({ sessionId: z.string().uuid(), accessToken }).parse(d))
+  .handler(async ({ data }) => {
+    const m = await import("@/lib/private-sessions.server");
+    return m.declineInvite(data.accessToken, data.sessionId);
+  });

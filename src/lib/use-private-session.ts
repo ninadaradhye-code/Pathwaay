@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   heartbeatPrivate,
+  inviteToPrivate,
   leavePrivate,
+  listInvitablePrivate,
   moderatePrivate,
   openPrivateSession,
   pullPrivateTracks,
@@ -419,6 +421,20 @@ export function usePrivateSession(opts: { sessionId: string; accessToken: string
     await moderatePrivate({ data: { ticket, targetUserId, action } });
   }, []);
 
+  /** Host only: classmates who could be invited, with any invite already sent. */
+  const listInvitable = useCallback(async () => {
+    const ticket = ticketRef.current;
+    if (!ticket) throw new Error("Not connected.");
+    return listInvitablePrivate({ data: { ticket } });
+  }, []);
+
+  /** Host only: invite a classmate (sessions are invite-only). */
+  const invite = useCallback(async (userId: string) => {
+    const ticket = ticketRef.current;
+    if (!ticket) throw new Error("Not connected.");
+    await inviteToPrivate({ data: { ticket, userId } });
+  }, []);
+
   /** Leave. For the host this ends the session for everyone. */
   const leave = useCallback(async () => {
     const ticket = ticketRef.current;
@@ -453,6 +469,8 @@ export function usePrivateSession(opts: { sessionId: string; accessToken: string
     toggleMic,
     toggleCam,
     moderate,
+    listInvitable,
+    invite,
     leave,
   };
 }

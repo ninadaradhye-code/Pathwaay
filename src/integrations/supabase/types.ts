@@ -101,6 +101,37 @@ export type Database = {
           },
         ];
       };
+      private_session_invites: {
+        Row: {
+          classroom_id: string;
+          created_at: string;
+          invited_by: string;
+          invited_by_name: string;
+          invitee_id: string;
+          invitee_name: string;
+          responded_at: string | null;
+          session_id: string;
+          status: "pending" | "accepted" | "declined" | "expired" | "cancelled";
+          topic: string;
+        };
+        Insert: {
+          classroom_id: string;
+          created_at?: string;
+          invited_by: string;
+          invited_by_name?: string;
+          invitee_id: string;
+          invitee_name?: string;
+          responded_at?: string | null;
+          session_id: string;
+          status?: "pending" | "accepted" | "declined" | "expired" | "cancelled";
+          topic: string;
+        };
+        Update: {
+          responded_at?: string | null;
+          status?: "pending" | "accepted" | "declined" | "expired" | "cancelled";
+        };
+        Relationships: [];
+      };
       private_session_media: {
         Row: {
           cf_session_id: string;
@@ -670,6 +701,20 @@ export type Database = {
         Returns: string;
       };
       sweep_private_sessions: { Args: Record<string, never>; Returns: undefined };
+      invite_to_private_session: {
+        Args: { p_session_id: string; p_host_id: string; p_invitee_id: string; p_max?: number };
+        Returns: undefined;
+      };
+      decline_private_invite: {
+        Args: { p_session_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      list_private_session_invitees: {
+        Args: { p_session_id: string; p_host_id: string };
+        Returns: { user_id: string; name: string; invite_status: string | null; busy: boolean }[];
+      };
+      sweep_classroom_messages: { Args: { _classroom_id: string }; Returns: undefined };
+      withdraw_my_classroom_messages: { Args: { _classroom_id: string }; Returns: undefined };
       get_friends: {
         Args: { _user_id: string };
         Returns: {
