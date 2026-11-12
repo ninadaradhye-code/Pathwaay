@@ -25,5 +25,8 @@ export function useCloudflareRealtime(opts:{classId:string|null;accessToken:stri
   return()=>{disposed=true;clean();};
  },[classId,accessToken,identity,name]);
  const leave=useCallback(async()=>{if(leaving.current)return;leaving.current=true;const t=ticketRef.current;if(t)await leaveClassroomVideo({data:{ticket:t}}).catch(()=>undefined);streamRef.current?.getTracks().forEach(x=>x.stop());pcRef.current?.close();onDisconnected();},[onDisconnected]);
- return {status,error,peers,localVideo,warningCount,removed,leave};
+ // Leave the classroom without navigating — used when stepping into a private
+ // session, so the seat is freed straight away instead of after the 75s timeout.
+ const release=useCallback(async()=>{if(leaving.current)return;leaving.current=true;const t=ticketRef.current;ticketRef.current=null;if(t)await leaveClassroomVideo({data:{ticket:t}}).catch(()=>undefined);streamRef.current?.getTracks().forEach(x=>x.stop());pcRef.current?.close();},[]);
+ return {status,error,peers,localVideo,warningCount,removed,leave,release};
 }

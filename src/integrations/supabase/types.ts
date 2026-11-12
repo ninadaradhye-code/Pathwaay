@@ -67,6 +67,153 @@ export type Database = {
         };
         Relationships: [];
       };
+      classroom_messages: {
+        Row: {
+          author_id: string;
+          author_name: string;
+          body: string;
+          classroom_id: string;
+          created_at: string;
+          id: string;
+          kind: "chat" | "doubt";
+          resolved_at: string | null;
+        };
+        Insert: {
+          author_id: string;
+          author_name?: string;
+          body: string;
+          classroom_id: string;
+          created_at?: string;
+          id?: string;
+          kind?: "chat" | "doubt";
+          resolved_at?: string | null;
+        };
+        Update: {
+          resolved_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "classroom_messages_classroom_id_fkey";
+            columns: ["classroom_id"];
+            isOneToOne: false;
+            referencedRelation: "classrooms";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      private_session_media: {
+        Row: {
+          cf_session_id: string;
+          pulled_mids: string[];
+          session_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          cf_session_id: string;
+          pulled_mids?: string[];
+          session_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          cf_session_id?: string;
+          pulled_mids?: string[];
+          session_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      private_session_participants: {
+        Row: {
+          cam_on: boolean;
+          classroom_id: string;
+          host_muted: boolean;
+          is_host: boolean;
+          joined_at: string;
+          last_seen: string;
+          media_version: number;
+          mic_on: boolean;
+          name: string;
+          session_id: string;
+          status: "joined" | "left" | "removed";
+          user_id: string;
+        };
+        Insert: {
+          cam_on?: boolean;
+          classroom_id: string;
+          host_muted?: boolean;
+          is_host?: boolean;
+          joined_at?: string;
+          last_seen?: string;
+          media_version?: number;
+          mic_on?: boolean;
+          name?: string;
+          session_id: string;
+          status?: "joined" | "left" | "removed";
+          user_id: string;
+        };
+        Update: {
+          cam_on?: boolean;
+          host_muted?: boolean;
+          last_seen?: string;
+          media_version?: number;
+          mic_on?: boolean;
+          name?: string;
+          status?: "joined" | "left" | "removed";
+        };
+        Relationships: [
+          {
+            foreignKeyName: "private_session_participants_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "private_sessions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      private_sessions: {
+        Row: {
+          classroom_id: string;
+          created_at: string;
+          doubt_id: string | null;
+          ended_at: string | null;
+          host_id: string;
+          host_name: string;
+          id: string;
+          started_by: string;
+          started_by_name: string;
+          status: "live" | "ended";
+          topic: string;
+        };
+        Insert: {
+          classroom_id: string;
+          created_at?: string;
+          doubt_id?: string | null;
+          ended_at?: string | null;
+          host_id: string;
+          host_name?: string;
+          id?: string;
+          started_by: string;
+          started_by_name?: string;
+          status?: "live" | "ended";
+          topic: string;
+        };
+        Update: {
+          ended_at?: string | null;
+          status?: "live" | "ended";
+        };
+        Relationships: [
+          {
+            foreignKeyName: "private_sessions_classroom_id_fkey";
+            columns: ["classroom_id"];
+            isOneToOne: false;
+            referencedRelation: "classrooms";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       classrooms: {
         Row: {
           capacity: number;
@@ -491,6 +638,38 @@ export type Database = {
     };
     Functions: {
       cleanup_old_doubts: { Args: never; Returns: undefined };
+      heartbeat_private_session: {
+        Args: { p_session_id: string; p_user_id: string; p_mic: boolean; p_cam: boolean };
+        Returns: { participant_status: string; host_muted: boolean; session_status: string }[];
+      };
+      is_classroom_member: { Args: { _classroom_id: string }; Returns: boolean };
+      is_private_session_participant: { Args: { _session_id: string }; Returns: boolean };
+      join_private_session: {
+        Args: { p_session_id: string; p_user_id: string; p_name: string; p_max?: number };
+        Returns: boolean;
+      };
+      leave_private_session: {
+        Args: { p_session_id: string; p_user_id: string };
+        Returns: boolean;
+      };
+      mark_private_media_published: {
+        Args: { p_session_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      moderate_private_session: {
+        Args: {
+          p_session_id: string;
+          p_host_id: string;
+          p_target: string | null;
+          p_action: "mute" | "unmute" | "remove" | "mute_all";
+        };
+        Returns: undefined;
+      };
+      start_help_session: {
+        Args: { p_doubt_id: string; p_helper_id: string; p_helper_name: string };
+        Returns: string;
+      };
+      sweep_private_sessions: { Args: Record<string, never>; Returns: undefined };
       get_friends: {
         Args: { _user_id: string };
         Returns: {
