@@ -204,7 +204,7 @@ function Admin() {
     <div className="flex min-h-screen bg-background">
       <aside className="w-60 shrink-0 bg-room text-white p-5">
         <div className="text-lg font-extrabold">PATHWAAY</div>
-        <div className="mt-1 text-[10px] uppercase tracking-widest text-white/50">Admin Panel</div>
+        <div className="mt-1 text-[12px] text-white/50">Admin Panel</div>
         <nav className="mt-6 space-y-1">
           {TABS.map((t) => (
             <button
@@ -295,7 +295,7 @@ function Admin() {
         {tab === "log" && !loading && (
           <div className="mt-6 overflow-hidden rounded-2xl bg-card shadow-card">
             <table className="w-full text-sm">
-              <thead className="bg-secondary text-xs uppercase tracking-wider text-muted-foreground">
+              <thead className="bg-secondary text-[13px] font-medium text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left">Moderator</th>
                   <th className="px-4 py-2 text-left">Target</th>

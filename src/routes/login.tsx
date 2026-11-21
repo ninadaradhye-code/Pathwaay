@@ -1,10 +1,11 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, MailCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SocialAuthButtons } from "@/components/social-auth";
-import { PathwaayLogo } from "@/components/brand";
+import { PathwaayMark, PathwaayWordmark } from "@/components/brand";
+import { DoubtDemo } from "@/components/doubt-demo";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -59,68 +60,79 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-sm">
-        <div className="flex justify-center">
-          <PathwaayLogo size="lg" tagline />
-        </div>
+    <div className="grid min-h-[100dvh] bg-background lg:grid-cols-[1fr_1.05fr]">
+      <div className="flex flex-col px-5 pb-10 pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-10">
+        <Link to="/" className="flex w-fit items-center gap-2.5">
+          <PathwaayMark className="h-8 w-8" />
+          <PathwaayWordmark className="text-[13px]" />
+        </Link>
 
-        {sent ? (
-          <div className="mt-10 rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-              <MailCheck className="h-7 w-7 text-primary" />
-            </div>
-            <h1 className="mt-5 text-xl font-bold">Check your inbox</h1>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              We sent a sign-in link to{" "}
-              <span className="font-semibold text-foreground">{email.trim()}</span>. Open it on this
-              device to continue.
-            </p>
-            <button
-              onClick={() => setSent(false)}
-              className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
-            >
-              <ArrowLeft className="h-4 w-4" /> Use a different email
-            </button>
-          </div>
-        ) : (
-          <div className="mt-10 rounded-2xl border border-border bg-card p-8 shadow-sm">
-            <h1 className="text-center text-xl font-bold">Sign in to Pathwaay</h1>
-            <p className="mt-1.5 text-center text-sm text-muted-foreground">
-              No password needed — we'll email you a secure link.
-            </p>
-
-            <form className="mt-7 space-y-3" onSubmit={sendLink}>
-              <label className="block">
-                <span className="sr-only">Email address</span>
-                <input
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@college.edu"
-                  className="w-full rounded-lg border border-input bg-background px-3.5 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25"
-                />
-              </label>
+        <div className="mx-auto flex w-full max-w-[380px] flex-1 flex-col justify-center py-12">
+          {sent ? (
+            <div>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-primary">
+                <MailCheck className="h-5 w-5" />
+              </span>
+              <h1 className="mt-5 text-[26px] font-bold leading-tight">Check your inbox</h1>
+              <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
+                We sent a sign-in link to{" "}
+                <span className="font-semibold text-foreground">{email.trim()}</span>. Open it on
+                this device to continue. It can take a minute to arrive; check spam if it doesn't.
+              </p>
               <button
-                disabled={loading}
-                className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+                onClick={() => setSent(false)}
+                className="mt-6 inline-flex items-center gap-1.5 text-[14px] font-semibold text-primary hover:underline"
               >
-                {loading ? "Sending link…" : "Continue with email"}
+                <ArrowLeft className="h-4 w-4" /> Use a different email
               </button>
-            </form>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-[26px] font-bold leading-tight">Sign in or create an account</h1>
+              <p className="mt-2 text-[15px] text-muted-foreground">
+                Enter your email and we'll send you a sign-in link. New here? The same link creates
+                your account.
+              </p>
 
-            <Divider />
+              <form className="mt-8 space-y-3" onSubmit={sendLink}>
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] font-medium">Email</span>
+                  <input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@college.edu"
+                    className="w-full rounded-lg border border-input bg-card px-3.5 py-2.5 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+                <button
+                  disabled={loading}
+                  className="w-full rounded-lg bg-primary py-2.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-brand-deep disabled:opacity-60"
+                >
+                  {loading ? "Sending link…" : "Email me a sign-in link"}
+                </button>
+              </form>
 
-            <SocialAuthButtons />
-          </div>
-        )}
+              <Divider />
 
-        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-          New to Pathwaay? Entering your email above creates your account.
-        </p>
+              <SocialAuthButtons />
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* The product, beside the form on large screens. */}
+      <aside className="hidden flex-col justify-center bg-brand px-12 text-white lg:flex">
+        <div className="mx-auto w-full max-w-[420px]">
+          <p className="max-w-[30ch] text-[22px] font-semibold leading-snug">
+            Post a doubt in your classroom, and the classmate who gets it helps you in a private
+            session.
+          </p>
+          <DoubtDemo className="mt-10" />
+        </div>
+      </aside>
     </div>
   );
 }
@@ -128,9 +140,7 @@ function LoginPage() {
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
+      <span className="block text-[13px] font-medium text-foreground">{label}</span>
       <div className="mt-1.5">{children}</div>
     </label>
   );
@@ -140,9 +150,7 @@ export function Divider() {
   return (
     <div className="my-6 flex items-center gap-3">
       <span className="h-px flex-1 bg-border" />
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        or
-      </span>
+      <span className="text-[13px] text-muted-foreground">or</span>
       <span className="h-px flex-1 bg-border" />
     </div>
   );

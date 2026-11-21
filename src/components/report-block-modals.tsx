@@ -52,7 +52,7 @@ export function ReportModal({
             </label>
           ))}
         </div>
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <label className="mt-4 block text-[13px] font-medium text-muted-foreground">
           Tell us more (optional)
         </label>
         <textarea

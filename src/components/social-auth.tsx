@@ -61,7 +61,7 @@ export function SocialAuthButtons() {
         type="button"
         onClick={() => signIn("google")}
         disabled={busy !== null}
-        className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-border bg-background py-3 text-sm font-semibold text-foreground transition hover:bg-secondary disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-input bg-card py-2.5 text-[15px] font-medium text-foreground transition hover:bg-secondary disabled:opacity-60"
       >
         <GoogleIcon />
         {busy === "google" ? "Connecting…" : "Continue with Google"}
@@ -70,7 +70,7 @@ export function SocialAuthButtons() {
         type="button"
         onClick={() => signIn("apple")}
         disabled={busy !== null}
-        className="flex w-full items-center justify-center gap-2.5 rounded-lg bg-foreground py-3 text-sm font-semibold text-background transition hover:opacity-90 disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-2.5 rounded-lg bg-foreground py-2.5 text-[15px] font-medium text-background transition hover:opacity-90 disabled:opacity-60"
       >
         <AppleIcon />
         {busy === "apple" ? "Connecting…" : "Continue with Apple"}

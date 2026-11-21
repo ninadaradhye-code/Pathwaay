@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, DoorOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureOpenClassrooms } from "@/lib/classrooms.functions";
-import { PathwaayMark, PathwaayWordmark } from "@/components/brand";
+import { EmptyState, LiveDot, PageBody, PageHeader, Section } from "@/components/app-shell";
 
 export const Route = createFileRoute("/_authenticated/subject/$subject")({
   head: ({ params }) => ({
@@ -132,130 +132,112 @@ function SubjectPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background pb-12">
-      {/* The subject screen carried no branding at all, which made it feel
-       * like a different product from the tab that links to it. */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
-        <div className="mx-auto max-w-6xl px-5 pb-3 pt-[max(0.875rem,env(safe-area-inset-top))]">
-          <div className="flex items-center gap-2.5">
-            <PathwaayMark className="h-7 w-7" />
-            <PathwaayWordmark className="text-[13px]" />
-            <Link
-              to="/home"
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </Link>
-          </div>
-          <h1 className="mt-2.5 text-[22px] font-extrabold leading-tight tracking-tight">{name}</h1>
-          {/* Real presence, counted from user_presence — replaces a marquee
-           * of hardcoded names that implied an active userbase. */}
-          <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted-foreground">
-            {liveCount > 0 ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-                </span>
-                <span className="font-medium text-success">
-                  {liveCount} {liveCount === 1 ? "student" : "students"} studying now
-                </span>
-              </>
-            ) : (
-              "Join a classroom to start solving doubts"
-            )}
-          </p>
-        </div>
-        <span className="block h-[3px] w-full bg-brand-cyan" />
-      </header>
-
-      <div className="mx-auto max-w-6xl px-5 pt-6">
-        {loading ? (
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-48 animate-pulse rounded-2xl border border-border bg-card"
-              />
-            ))}
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center">
-            <p className="text-sm font-medium">No classrooms yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Rooms for this subject haven't been set up.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {visible.map((c, i) => {
-              const full = c.used >= c.capacity;
-              const pct = Math.min(100, (c.used / c.capacity) * 100);
-              const barColor = full
-                ? "bg-danger"
-                : c.used > c.capacity * 0.7
-                  ? "bg-warning"
-                  : "bg-success";
-              return (
-                <div
-                  key={c.id}
-                  className="flex flex-col rounded-2xl border border-border/70 bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-elevated"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold">Room {i + 1}</h3>
-                    {c.is_verified && (
-                      <span className="rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-bold text-success">
-                        VERIFIED
-                      </span>
-                    )}
-                    <span
-                      className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                        full ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
-                      }`}
-                    >
-                      {full ? "FULL" : "OPEN"}
-                    </span>
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-2xl font-bold tabular-nums">{c.used}</span>
-                      <span className="text-sm text-muted-foreground">/ {c.capacity} students</span>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className={`h-full rounded-full transition-all ${barColor}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {full ? (
-                    <button
-                      disabled
-                      className="mt-5 w-full cursor-not-allowed rounded-xl bg-secondary py-2.5 text-sm font-semibold text-muted-foreground"
-                    >
-                      Room full
-                    </button>
-                  ) : (
-                    // Classroom video runs on the Cloudflare Realtime SFU. The
-                    // peer-to-peer room is still reachable at /room/$roomId;
-                    // it could not carry more than a handful of cameras,
-                    // which is why this is the way in.
-                    <Link
-                      to="/classroom/$classId"
-                      params={{ classId: c.id }}
-                      className="mt-5 block w-full rounded-xl bg-primary py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-brand transition hover:bg-brand-deep active:scale-[0.99]"
-                    >
-                      Join room
-                    </Link>
-                  )}
+    <>
+      <PageHeader
+        back={
+          <Link
+            to="/home"
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Your subjects
+          </Link>
+        }
+        title={name}
+        description={
+          liveCount > 0 ? (
+            <span className="inline-flex items-center gap-1.5 font-medium text-success">
+              <LiveDot />
+              {liveCount} {liveCount === 1 ? "student" : "students"} studying now
+            </span>
+          ) : (
+            "Join a classroom to study alongside others. Ask doubts in its chat, and help with theirs."
+          )
+        }
+      />
+      <PageBody>
+        <Section
+          title="Classrooms"
+          description="Camera on, mic off. Talking happens in private help sessions started from a doubt."
+        >
+          {loading ? (
+            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-4">
+                  <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                  <div className="h-1.5 flex-1 animate-pulse rounded bg-muted" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
+              ))}
+            </div>
+          ) : visible.length === 0 ? (
+            <EmptyState icon={DoorOpen} title="No classrooms yet">
+              Rooms for this subject haven't been set up. Try again in a minute — new rooms open
+              automatically.
+            </EmptyState>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+              {visible.map((c, i) => {
+                const full = c.used >= c.capacity;
+                const pct = Math.min(100, (c.used / c.capacity) * 100);
+                return (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-4">
+                    <div className="order-1 min-w-0 flex-1 sm:w-28 sm:flex-none">
+                      <p className="text-[15px] font-semibold">Room {i + 1}</p>
+                      <p className="text-[13px] text-muted-foreground">
+                        {c.is_verified
+                          ? "Verified host"
+                          : full
+                            ? "Full"
+                            : c.used === 0
+                              ? "Empty"
+                              : "Open"}
+                      </p>
+                    </div>
+                    <div className="order-3 min-w-[140px] basis-full sm:order-2 sm:basis-auto sm:flex-1">
+                      <div className="flex items-baseline justify-between text-[13px]">
+                        <span className="tabular-nums">
+                          <span className="font-semibold text-foreground">{c.used}</span>
+                          <span className="text-muted-foreground">
+                            {" "}
+                            of {c.capacity} seats taken
+                          </span>
+                        </span>
+                      </div>
+                      <div
+                        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                        role="meter"
+                        aria-valuemin={0}
+                        aria-valuemax={c.capacity}
+                        aria-valuenow={c.used}
+                        aria-label={`Room ${i + 1} occupancy`}
+                      >
+                        <div
+                          className={`h-full rounded-full ${full ? "bg-danger" : "bg-primary"}`}
+                          style={{ width: `${Math.max(pct, c.used > 0 ? 4 : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                    {full ? (
+                      <span className="order-2 rounded-lg bg-muted px-4 py-2 text-center text-[13px] font-medium text-muted-foreground sm:order-3">
+                        Room full
+                      </span>
+                    ) : (
+                      // Classroom video runs on the Cloudflare Realtime SFU. The
+                      // peer-to-peer room is still reachable at /room/$roomId.
+                      <Link
+                        to="/classroom/$classId"
+                        params={{ classId: c.id }}
+                        className="order-2 rounded-lg bg-primary px-4 py-2 text-center text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-brand-deep sm:order-3"
+                      >
+                        Join room
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Section>
+      </PageBody>
+    </>
   );
 }

@@ -132,7 +132,7 @@ export function RatingModal({
         {/* Who am I rating? Always visible, so the score is never ambiguous. */}
         {ratees.length > 1 && (
           <>
-            <div className="mt-5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <div className="mt-5 text-[13px] font-medium text-muted-foreground">
               Who are you rating?
             </div>
             <div className="mt-2 space-y-2">
@@ -192,7 +192,7 @@ export function RatingModal({
           ))}
         </div>
 
-        <div className="mt-6 text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className="mt-6 text-center text-[13px] font-medium text-muted-foreground">
           {current ? `Rate ${current.name}` : "Rate your session"}
         </div>
         <div className="mt-3 flex justify-between gap-1">
@@ -210,7 +210,7 @@ export function RatingModal({
           {score ? LABELS[score] : " "}
         </div>
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <label className="mt-4 block text-[13px] font-medium text-muted-foreground">
           Tell us why (optional)
         </label>
         <textarea

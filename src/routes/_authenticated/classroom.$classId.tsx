@@ -129,7 +129,9 @@ function Classroom() {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{session?.title ?? "Classroom"}</p>
           <p className="text-xs text-white/50">
-            {live.status === "connected" ? `Live · ${total} people` : "Connecting…"}
+            {live.status === "connected"
+              ? `${total} ${total === 1 ? "person" : "people"} in the room`
+              : "Connecting…"}
           </p>
         </div>
         <span className="ml-auto flex items-center gap-1 text-xs text-white/60">

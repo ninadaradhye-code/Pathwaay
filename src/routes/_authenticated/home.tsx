@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
+  ChevronRight,
   Binary,
   Bot,
   BookOpen,
@@ -8,7 +9,6 @@ import {
   Laptop,
   Layers,
   ShieldCheck,
-  Sparkles,
   Terminal,
   Sigma,
   Atom,
@@ -18,8 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { usePlan } from "@/lib/plan-context";
-import { BottomNav } from "@/components/bottom-nav";
-import { AppHeader } from "@/components/brand";
+import { EmptyState, LiveDot, PageBody, PageHeader, Section } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/home")({
@@ -50,49 +49,49 @@ interface SubjectRow {
 // courses a per-slug map is unmaintainable, and the old one listed the seven
 // placeholder subjects that no longer exist.
 const ICON_RULES: Array<{ match: RegExp; icon: LucideIcon; className: string }> = [
-  { match: /security|cyber|crypt/i, icon: ShieldCheck, className: "bg-brand-violet text-white" },
-  { match: /web|full.?stack|frontend/i, icon: Code2, className: "bg-brand-amber text-navy" },
+  { match: /security|cyber|crypt/i, icon: ShieldCheck, className: "" },
+  { match: /web|full.?stack|frontend/i, icon: Code2, className: "" },
   {
     match: /data structure|algorithm|discrete/i,
     icon: Binary,
-    className: "bg-brand-cyan text-navy",
+    className: "",
   },
   {
     match: /artificial intelligence|machine learning|neural|\bai\b/i,
     icon: Bot,
-    className: "bg-brand-violet text-white",
+    className: "",
   },
   {
     match: /operating system|linux|unix|network/i,
     icon: Terminal,
-    className: "bg-navy text-white",
+    className: "",
   },
   {
     match: /programming|software|compiler|python|java|\bc\+\+/i,
     icon: Laptop,
-    className: "bg-primary text-primary-foreground",
+    className: "",
   },
-  { match: /database|dbms|\bsql\b/i, icon: Layers, className: "bg-brand-lime text-navy" },
-  { match: /math|calculus|algebra|statistic/i, icon: Sigma, className: "bg-primary text-white" },
-  { match: /physic|mechanic|thermo|fluid/i, icon: Atom, className: "bg-brand-cyan text-navy" },
+  { match: /database|dbms|\bsql\b/i, icon: Layers, className: "" },
+  { match: /math|calculus|algebra|statistic/i, icon: Sigma, className: "" },
+  { match: /physic|mechanic|thermo|fluid/i, icon: Atom, className: "" },
   {
     match: /chemi|material|metallurg/i,
     icon: FlaskConical,
-    className: "bg-brand-amber text-navy",
+    className: "",
   },
   {
     match: /electr|circuit|signal|electronic/i,
     icon: Cpu,
-    className: "bg-brand-lime text-navy",
+    className: "",
   },
   {
     match: /civil|structur|survey|construct/i,
     icon: Building2,
-    className: "bg-navy text-white",
+    className: "",
   },
 ];
 
-const FALLBACK = { icon: BookOpen, className: "bg-primary text-primary-foreground" };
+const FALLBACK = { icon: BookOpen, className: "" };
 
 function iconFor(name: string) {
   return ICON_RULES.find((r) => r.match.test(name)) ?? FALLBACK;
@@ -203,90 +202,109 @@ function Home() {
   // needs when picking a room, and a subject taught across both semesters of a
   // year is one classroom — showing it under two headings implied two rooms.
 
+  const busiest = [...subjects].sort((a, b) => b.live - a.live)[0];
+
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <AppHeader
-        accent="cyan"
-        title={`${greeting}, ${firstName}! 👋`}
-        subtitle={
+    <>
+      <PageHeader
+        title={`${greeting}, ${firstName}`}
+        description={
           totalLive > 0 ? (
-            <span className="inline-flex items-center gap-1.5 font-medium text-success">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+            <span className="inline-flex flex-wrap items-center gap-x-2">
+              <span className="inline-flex items-center gap-1.5 font-medium text-success">
+                <LiveDot />
+                {totalLive} {totalLive === 1 ? "classmate is" : "classmates are"} studying now
               </span>
-              {totalLive} studying right now
+              <span>in {courseLabel}.</span>
             </span>
           ) : (
-            `${courseLabel} · ${profile?.year ?? ""}`.trim()
+            `Pick a subject to join its classroom. Ask a doubt there, or help someone with theirs.`
           )
         }
       />
-
-      {loading ? (
-        /* Same shape as the real cards, so the page does not jump when they
-         * arrive — the old skeleton was a horizontal strip and the grid is
-         * two columns. */
-        <div className="mt-6 grid grid-cols-2 gap-3 px-5">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-[74px] animate-pulse rounded-2xl bg-card shadow-card" />
-          ))}
-        </div>
-      ) : subjects.length === 0 ? (
-        <div className="mt-10 px-5">
-          <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-            <BookOpen className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-3 text-sm font-medium">No subjects for your year yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Check your course and year in your profile.
-            </p>
+      <PageBody>
+        {loading ? (
+          /* Same shape as the real tiles, so the page does not jump. */
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="h-[76px] animate-pulse rounded-xl border border-border bg-card"
+              />
+            ))}
           </div>
-        </div>
-      ) : (
-        <section className="mt-6 px-5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-bold text-foreground">Your subjects</h2>
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-              {subjects.length}
-            </span>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {subjects.map((s) => {
-              const { icon: Icon, className } = iconFor(s.name);
-              return (
-                <Link
-                  key={s.slug}
-                  to="/subject/$subject"
-                  params={{ subject: s.slug }}
-                  className="group relative flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-elevated active:translate-y-0"
-                >
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105 ${className}`}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 text-sm font-semibold leading-tight">{s.name}</div>
-                  {s.live > 0 && <LiveDot count={s.live} />}
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <BottomNav />
-    </div>
-  );
-}
-
-/** Small corner badge so a busy subject stands out without adding a row of
- * text under every card. */
-function LiveDot({ count }: { count: number }) {
-  return (
-    <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-success px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-      {count}
-    </span>
+        ) : subjects.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            title="No subjects for your year yet"
+            action={
+              <Link
+                to="/settings"
+                className="rounded-lg bg-primary px-4 py-2 text-[14px] font-semibold text-primary-foreground hover:bg-brand-deep"
+              >
+                Check course and year
+              </Link>
+            }
+          >
+            Subjects come from your course and year. If those are wrong, fix them in your profile.
+          </EmptyState>
+        ) : (
+          <Section
+            title="Your subjects"
+            description={`${subjects.length} subjects for ${courseLabel}${profile?.year ? `, ${profile.year}` : ""}`}
+          >
+            {busiest && busiest.live > 0 && (
+              <Link
+                to="/subject/$subject"
+                params={{ subject: busiest.slug }}
+                className="mb-4 flex items-center gap-4 rounded-xl border border-success/30 bg-success/[0.06] px-4 py-3.5 transition-colors hover:bg-success/10"
+              >
+                <LiveDot />
+                <span className="min-w-0 flex-1 text-[14px]">
+                  <span className="font-semibold">{busiest.name}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    is the busiest room right now, with {busiest.live}{" "}
+                    {busiest.live === 1 ? "student" : "students"}.
+                  </span>
+                </span>
+                <span className="shrink-0 text-[13px] font-semibold text-success">Join them</span>
+              </Link>
+            )}
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {subjects.map((s) => {
+                const { icon: Icon } = iconFor(s.name);
+                return (
+                  <li key={s.slug}>
+                    <Link
+                      to="/subject/$subject"
+                      params={{ subject: s.slug }}
+                      className="group flex h-full items-center gap-3.5 rounded-xl border border-border bg-card px-4 py-3.5 transition-colors hover:border-primary/40 hover:bg-accent/40"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
+                        <Icon className="h-5 w-5" strokeWidth={1.9} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[14px] font-semibold leading-snug">
+                          {s.name}
+                        </span>
+                        <span className="mt-0.5 block text-[13px]">
+                          {s.live > 0 ? (
+                            <span className="font-medium text-success">{s.live} studying now</span>
+                          ) : (
+                            <span className="text-muted-foreground">Quiet right now</span>
+                          )}
+                        </span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </Section>
+        )}
+      </PageBody>
+    </>
   );
 }

@@ -1,6 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, MapPin, GraduationCap, UserPlus, Check, Clock } from "lucide-react";
+import { ArrowLeft, MapPin, GraduationCap, UserPlus, Check, Clock, UserRound } from "lucide-react";
+import { Avatar, EmptyState, PageBody, PageHeader } from "@/components/app-shell";
+import { SuperstudentBadge } from "@/components/superstudent-badge";
+import { isSuperstudent, SUPERSTUDENT_EXPLAINER } from "@/lib/superstudent";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { sendFriendRequest, respondToRequest, fetchMyStats, type MyStats } from "@/lib/social";
@@ -110,138 +113,173 @@ function PublicProfile() {
   }, [userId]);
 
   const displayName = profile?.name?.trim() || "Student";
-  const initial = displayName.charAt(0).toUpperCase();
+  const superstudent =
+    !!stats && isSuperstudent(stats.rank, stats.solved, stats.avg_rating, stats.ratings_count);
+
+  const addFriend = async () => {
+    try {
+      const msg = await sendFriendRequest(userId);
+      setFriendState("outgoing");
+      toast.success(msg);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not send request");
+    }
+  };
+  const accept = async () => {
+    try {
+      await respondToRequest(userId, true);
+      setFriendState("accepted");
+      toast.success("Friend request accepted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not accept");
+    }
+  };
+
+  // The button reflects the real relationship rather than always offering "Add".
+  const friendAction =
+    friendState === "self" ? (
+      <Link
+        to="/settings"
+        className="rounded-lg border border-input bg-card px-4 py-2 text-[14px] font-medium hover:bg-secondary"
+      >
+        Edit profile
+      </Link>
+    ) : friendState === "accepted" ? (
+      <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-[14px] font-medium text-muted-foreground">
+        <Check className="h-4 w-4 text-success" /> Friends
+      </span>
+    ) : friendState === "outgoing" ? (
+      <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-[14px] font-medium text-muted-foreground">
+        <Clock className="h-4 w-4" /> Request sent
+      </span>
+    ) : friendState === "incoming" ? (
+      <button
+        onClick={() => void accept()}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-[14px] font-semibold text-primary-foreground hover:bg-brand-deep"
+      >
+        <Check className="h-4 w-4" /> Accept friend request
+      </button>
+    ) : (
+      <button
+        onClick={() => void addFriend()}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-[14px] font-semibold text-primary-foreground hover:bg-brand-deep"
+      >
+        <UserPlus className="h-4 w-4" /> Add friend
+      </button>
+    );
+
+  const back = (
+    <button
+      onClick={() => (window.history.length > 1 ? window.history.back() : nav({ to: "/experts" }))}
+      className="inline-flex items-center gap-1 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" /> Back
+    </button>
+  );
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader
+          back={back}
+          title={<span className="inline-block h-7 w-48 animate-pulse rounded bg-muted" />}
+        />
+        <PageBody>
+          <div className="h-24 animate-pulse rounded-xl border border-border bg-card" />
+        </PageBody>
+      </>
+    );
+  }
+
+  if (notFound || !profile) {
+    return (
+      <>
+        <PageHeader back={back} title="Profile not found" />
+        <PageBody>
+          <EmptyState
+            icon={UserRound}
+            title="This student isn't on Pathwaay any more"
+            action={
+              <Link
+                to="/experts"
+                className="rounded-lg bg-primary px-4 py-2 text-[14px] font-semibold text-primary-foreground hover:bg-brand-deep"
+              >
+                Back to Friends
+              </Link>
+            }
+          >
+            They may have deleted their account.
+          </EmptyState>
+        </PageBody>
+      </>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <header className="flex items-center gap-3 px-5 pt-6">
-        <button
-          onClick={() => nav({ to: "/experts" })}
-          className="rounded-full bg-card p-2 shadow-card"
-          aria-label="Back"
+    <>
+      <PageHeader
+        back={back}
+        title={
+          <span className="flex items-center gap-4">
+            <Avatar name={displayName} src={profile.avatar_url} className="h-14 w-14 text-lg" />
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-2">
+                {displayName}
+                {superstudent && <SuperstudentBadge />}
+              </span>
+              <span className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] font-normal text-muted-foreground">
+                {(profile.course || profile.year) && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <GraduationCap className="h-4 w-4" />
+                    {[profile.course, profile.year && `${profile.year} year`]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                )}
+                {profile.college && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4" /> {profile.college}
+                  </span>
+                )}
+              </span>
+            </span>
+          </span>
+        }
+        actions={friendAction}
+      />
+      <PageBody>
+        <section
+          aria-label="Activity"
+          className="grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4"
         >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h1 className="text-lg font-bold">Profile</h1>
-      </header>
-
-      {loading ? (
-        <div className="mt-16 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : notFound || !profile ? (
-        <div className="mt-16 px-5 text-center">
-          <p className="text-sm font-semibold text-foreground">Profile not found</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            This user may have deleted their account.
+          {/* Confirmed by the person who raised the doubt, not offers made. */}
+          <StatBox label="Doubts solved" value={String(stats?.solved ?? 0)} />
+          <StatBox
+            label="Average rating"
+            value={
+              stats && stats.ratings_count > 0 ? `${Number(stats.avg_rating).toFixed(1)}/10` : "—"
+            }
+            note={stats?.ratings_count ? `from ${stats.ratings_count} sessions` : "Not rated yet"}
+          />
+          <StatBox label="Doubts asked" value={String(stats?.doubts_asked ?? 0)} />
+          <StatBox label="Rank" value={stats?.rank ? `#${stats.rank.toLocaleString()}` : "—"} />
+        </section>
+        {superstudent && (
+          <p className="mt-4 text-[13px] text-muted-foreground">
+            Superstudent: {SUPERSTUDENT_EXPLAINER}
           </p>
-          <Link
-            to="/experts"
-            className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-          >
-            Back to Friends
-          </Link>
-        </div>
-      ) : (
-        <>
-          <section className="mt-6 px-5 text-center">
-            {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={displayName}
-                className="mx-auto h-24 w-24 rounded-full object-cover"
-              />
-            ) : (
-              <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary text-3xl font-bold text-primary-foreground">
-                {initial}
-              </div>
-            )}
-            <h2 className="mt-3 text-xl font-extrabold text-foreground">{displayName}</h2>
-            {profile.college && (
-              <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" /> {profile.college}
-              </div>
-            )}
-          </section>
-
-          {(profile.course || profile.year) && (
-            <section className="mt-5 mx-5 rounded-2xl bg-card p-4 shadow-card text-sm">
-              <div className="flex items-center gap-2 text-foreground">
-                <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  {profile.course || "—"}
-                  {profile.year ? ` · ${profile.year} year` : ""}
-                </span>
-              </div>
-            </section>
-          )}
-
-          <section className="mt-5 mx-5 grid grid-cols-3 gap-3 text-center">
-            {/* Confirmed by the person who raised the doubt, not offers made. */}
-            <StatBox label="Solved" value={String(stats?.solved ?? 0)} />
-            <StatBox label="Asked" value={String(stats?.doubts_asked ?? 0)} />
-            <StatBox
-              label="Rating"
-              value={
-                stats && stats.ratings_count > 0 ? `${Number(stats.avg_rating).toFixed(1)}/10` : "—"
-              }
-            />
-          </section>
-
-          <section className="mt-5 mx-5">
-            {/* The button used to be unconditional, so an existing friend was
-             * still invited to be added. Reflect the real relationship. */}
-            {friendState === "self" ? null : friendState === "accepted" ? (
-              <div className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-sm font-semibold text-muted-foreground">
-                <Check className="h-4 w-4 text-success" /> Friends
-              </div>
-            ) : friendState === "outgoing" ? (
-              <div className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-sm font-semibold text-muted-foreground">
-                <Clock className="h-4 w-4" /> Request sent
-              </div>
-            ) : friendState === "incoming" ? (
-              <button
-                onClick={async () => {
-                  try {
-                    await respondToRequest(userId, true);
-                    setFriendState("accepted");
-                    toast.success("Friend request accepted");
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Could not accept");
-                  }
-                }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
-              >
-                <Check className="h-4 w-4" /> Accept request
-              </button>
-            ) : (
-              <button
-                onClick={async () => {
-                  try {
-                    const msg = await sendFriendRequest(userId);
-                    setFriendState("outgoing");
-                    toast.success(msg);
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Could not send request");
-                  }
-                }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
-              >
-                <UserPlus className="h-4 w-4" /> Add Friend
-              </button>
-            )}
-          </section>
-        </>
-      )}
-    </div>
+        )}
+      </PageBody>
+    </>
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="rounded-2xl bg-card p-3 shadow-card">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className="mt-1 text-lg font-extrabold text-foreground">{value}</div>
+    <div className="border-border px-4 py-4 [&:not(:last-child)]:border-r max-sm:[&:nth-child(2)]:border-r-0 max-sm:[&:nth-child(-n+2)]:border-b">
+      <p className="text-[13px] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-[24px] font-bold leading-none">{value}</p>
+      {note && <p className="mt-1.5 text-[12px] text-muted-foreground">{note}</p>}
     </div>
   );
 }

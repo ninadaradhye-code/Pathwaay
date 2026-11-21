@@ -195,12 +195,12 @@ function PrivateSessionPage() {
         <PathwaayMark className="h-8 w-8 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2 py-0.5 text-[12px] font-semibold">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Private session
             </span>
             {s.isHost && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-brand-amber/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-amber">
-                <Crown className="h-3 w-3" /> Host
+              <span className="inline-flex items-center gap-1 rounded-md bg-doubt/20 px-2 py-0.5 text-[12px] font-semibold text-doubt">
+                <Crown className="h-3 w-3" /> You're the host
               </span>
             )}
           </div>
@@ -460,7 +460,7 @@ function Tile({
       )}
       {controls && <div className="absolute right-2 top-2">{controls}</div>}
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-black/55 px-3 py-2 text-xs font-semibold">
-        {isHost && <Crown className="h-3.5 w-3.5 shrink-0 text-brand-amber" aria-label="Host" />}
+        {isHost && <Crown className="h-3.5 w-3.5 shrink-0 text-doubt" aria-label="Host" />}
         <span className="truncate">{name}</span>
         {hostMuted && (
           <span className="shrink-0 rounded bg-danger/30 px-1.5 py-0.5 text-[10px] text-red-100">
@@ -573,7 +573,7 @@ type Invitable = {
 };
 
 const INVITE_NOTE: Record<NonNullable<Invitable["inviteStatus"]>, string> = {
-  pending: "Invited · waiting for an answer",
+  pending: "Invited, waiting for an answer",
   accepted: "Was in this session",
   declined: "Declined",
   expired: "Didn't answer",

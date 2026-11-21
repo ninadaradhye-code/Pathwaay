@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { PathwaayLogo } from "@/components/brand";
+import { PathwaayMark, PathwaayWordmark } from "@/components/brand";
 
 export const Route = createFileRoute("/onboarding")({
   ssr: false,
@@ -156,102 +156,113 @@ function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="flex justify-center">
-          <PathwaayLogo size="lg" tagline />
-        </div>
-
-        <div className="mt-8 rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <h1 className="text-xl font-bold">Tell us about yourself</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Your name is shown to peers when you ask or answer a doubt.
+    <div className="min-h-[100dvh] bg-background px-5 pb-16 pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-10">
+      <div className="flex items-center gap-2.5">
+        <PathwaayMark className="h-8 w-8" />
+        <PathwaayWordmark className="text-[13px]" />
+      </div>
+      <div className="mx-auto w-full max-w-[560px] pt-10 sm:pt-16">
+        <div>
+          <h1 className="text-[26px] font-bold leading-tight">Set up your profile</h1>
+          <p className="mt-2 text-[15px] text-muted-foreground">
+            Your course and year decide which subject classrooms you see. Your name is what
+            classmates see when you ask or answer a doubt.
           </p>
 
-          <form className="mt-6 space-y-4" onSubmit={submit}>
-            <Field label="Full name">
-              <input
-                value={form.name}
-                onChange={set("name")}
-                required
-                autoComplete="name"
-                placeholder="Ada Lovelace"
-                className={inputClass}
-              />
-            </Field>
+          <form className="mt-8 space-y-8" onSubmit={submit}>
+            <fieldset className="space-y-4">
+              <legend className="mb-3 text-[15px] font-semibold">About you</legend>
+              <Field label="Full name">
+                <input
+                  value={form.name}
+                  onChange={set("name")}
+                  required
+                  autoComplete="name"
+                  placeholder="Ada Lovelace"
+                  className={inputClass}
+                />
+              </Field>
 
-            <Field label="Date of birth">
-              <input type="date" value={form.dob} onChange={set("dob")} className={inputClass} />
-            </Field>
+              <Field label="Date of birth">
+                <input type="date" value={form.dob} onChange={set("dob")} className={inputClass} />
+              </Field>
+            </fieldset>
 
-            <Field label="College">
-              <input
-                value={form.college}
-                onChange={set("college")}
-                placeholder="Indian Institute of Technology"
-                className={inputClass}
-              />
-            </Field>
+            <fieldset className="space-y-4 border-t border-border pt-7">
+              <legend className="float-left mb-3 w-full text-[15px] font-semibold">
+                What you study
+              </legend>
+              <Field label="College">
+                <input
+                  value={form.college}
+                  onChange={set("college")}
+                  placeholder="Indian Institute of Technology"
+                  className={inputClass}
+                />
+              </Field>
 
-            <Field label="Degree">
-              <select
-                value={form.degree}
-                onChange={(e) =>
-                  // Courses are degree-specific, so changing degree clears the
-                  // course rather than leaving a B.Tech course under B.Sc.
-                  setForm((f) => ({ ...f, degree: e.target.value, courseSlug: "" }))
-                }
-                className={inputClass}
-              >
-                <option value="">Select your degree…</option>
-                <option value="B.Tech">B.Tech</option>
-                <option value="B.Sc">B.Sc</option>
-              </select>
-            </Field>
+              <div className="grid gap-4 sm:grid-cols-[1fr_2fr_1fr]">
+                <Field label="Degree">
+                  <select
+                    value={form.degree}
+                    onChange={(e) =>
+                      // Courses are degree-specific, so changing degree clears the
+                      // course rather than leaving a B.Tech course under B.Sc.
+                      setForm((f) => ({ ...f, degree: e.target.value, courseSlug: "" }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Select your degree…</option>
+                    <option value="B.Tech">B.Tech</option>
+                    <option value="B.Sc">B.Sc</option>
+                  </select>
+                </Field>
 
-            <Field label="Course">
-              <select
-                value={form.courseSlug}
-                onChange={set("courseSlug")}
-                disabled={!form.degree}
-                className={`${inputClass} disabled:opacity-50`}
-              >
-                <option value="">
-                  {form.degree ? "Select your course…" : "Choose a degree first"}
-                </option>
-                {coursesForDegree.map((c) => (
-                  <option key={c.slug} value={c.slug}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                <Field label="Course">
+                  <select
+                    value={form.courseSlug}
+                    onChange={set("courseSlug")}
+                    disabled={!form.degree}
+                    className={`${inputClass} disabled:opacity-50`}
+                  >
+                    <option value="">
+                      {form.degree ? "Select your course…" : "Choose a degree first"}
+                    </option>
+                    {coursesForDegree.map((c) => (
+                      <option key={c.slug} value={c.slug}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-            <Field label="Year">
-              <select value={form.year} onChange={set("year")} className={inputClass}>
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                <Field label="Year">
+                  <select value={form.year} onChange={set("year")} className={inputClass}>
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
 
-            {selectedCourse && (
-              <p className="rounded-lg bg-secondary px-3 py-2.5 text-xs text-muted-foreground">
-                You'll see subjects from semesters{" "}
-                <span className="font-semibold text-foreground">
-                  {yearIndex * 2 - 1} and {yearIndex * 2}
-                </span>{" "}
-                of {selectedCourse.name}.
-              </p>
-            )}
+              {selectedCourse && (
+                <p className="text-[13px] text-muted-foreground">
+                  You'll see subjects from semesters{" "}
+                  <span className="font-semibold text-foreground">
+                    {yearIndex * 2 - 1} and {yearIndex * 2}
+                  </span>{" "}
+                  of {selectedCourse.name}.
+                </p>
+              )}
+            </fieldset>
 
             <button
               disabled={saving}
-              className="mt-2 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+              className="w-full rounded-lg bg-primary py-2.5 text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-brand-deep disabled:opacity-60 sm:w-auto sm:px-8"
             >
-              {saving ? "Saving…" : "Continue"}
+              {saving ? "Saving…" : "Continue to your subjects"}
             </button>
           </form>
         </div>
@@ -261,12 +272,12 @@ function Onboarding() {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-input bg-background px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25";
+  "w-full rounded-lg border border-input bg-card px-3.5 py-2.5 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold text-foreground">{label}</span>
+      <span className="mb-1.5 block text-[13px] font-medium text-foreground">{label}</span>
       {children}
     </label>
   );

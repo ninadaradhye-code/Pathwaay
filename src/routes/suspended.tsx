@@ -95,9 +95,7 @@ function Suspended() {
         </p>
 
         <div className="mt-6 rounded-xl bg-card px-6 py-5">
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Time remaining
-          </div>
+          <div className="text-[13px] font-medium text-muted-foreground">Time remaining</div>
           <div className="mt-1 text-4xl font-bold tabular-nums text-foreground">
             {hours > 0
               ? `${hours}h ${String(mins % 60).padStart(2, "0")}m`

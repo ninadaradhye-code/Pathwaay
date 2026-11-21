@@ -4,8 +4,7 @@ import { toast } from "sonner";
 import { Camera, LogOut, Moon, Sun, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlan } from "@/lib/plan-context";
-import { BottomNav } from "@/components/bottom-nav";
-import { AppHeader } from "@/components/brand";
+import { Avatar, PageBody, PageHeader } from "@/components/app-shell";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -189,20 +188,16 @@ function Settings() {
   const displayName = profile?.name?.trim() || "Student";
 
   return (
-    <div className="min-h-screen bg-background pb-28">
-      <AppHeader accent="violet" title="Profile" subtitle="Your account and appearance" />
-
-      <div className="mx-auto max-w-2xl px-5 py-6">
+    <>
+      <PageHeader
+        title="Profile"
+        description="How classmates see you, and how Pathwaay looks for you."
+      />
+      <PageBody className="max-w-4xl">
         {/* Avatar + identity */}
         <section className="flex items-center gap-5">
           <div className="relative shrink-0">
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <Avatar name={displayName} src={profile?.avatar} className="h-20 w-20 text-2xl" />
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
@@ -227,7 +222,7 @@ function Settings() {
             />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-lg font-bold">{displayName}</div>
+            <div className="truncate text-[20px] font-bold">{displayName}</div>
             <div className="truncate text-sm text-muted-foreground">{profile?.email}</div>
             {profile?.avatar && (
               <button
@@ -241,7 +236,10 @@ function Settings() {
         </section>
 
         {/* Personal details — always editable, one save button. */}
-        <Section title="Personal details">
+        <Section
+          title="Personal details"
+          description="Your name is shown when you ask or answer a doubt. Course and year decide which subject classrooms you see."
+        >
           <Field label="Full name">
             <input
               value={form.name}
@@ -290,7 +288,7 @@ function Settings() {
             <button
               onClick={() => void save()}
               disabled={saving || !dirty}
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+              className="rounded-lg bg-primary px-5 py-2 text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-brand-deep disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save changes"}
             </button>
@@ -298,19 +296,19 @@ function Settings() {
         </Section>
 
         {/* Account — read-only facts about the login itself. */}
-        <Section title="Account">
+        <Section title="Account" description="You sign in with a link sent to this email.">
           <div className="flex items-center justify-between gap-4 py-1">
             <div className="min-w-0">
               <div className="text-sm font-medium">Email</div>
               <div className="truncate text-sm text-muted-foreground">{profile?.email}</div>
             </div>
-            <span className="shrink-0 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-              Sign-in
-            </span>
           </div>
         </Section>
 
-        <Section title="Appearance">
+        <Section
+          title="Appearance"
+          description="Classrooms and private sessions are always dark, so video stands out."
+        >
           <div className="flex gap-2 sm:max-w-xs">
             <ThemeButton
               active={theme === "light"}
@@ -327,7 +325,7 @@ function Settings() {
           </div>
         </Section>
 
-        <div className="mt-8 border-t border-border pt-6">
+        <div className="mt-10 border-t border-border pt-6">
           <button
             onClick={() => void signOut()}
             className="inline-flex items-center gap-2 rounded-lg border border-danger/30 px-5 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/10"
@@ -335,21 +333,33 @@ function Settings() {
             <LogOut className="h-4 w-4" /> Sign out
           </button>
         </div>
-      </div>
-
-      <BottomNav />
-    </div>
+      </PageBody>
+    </>
   );
 }
 
 const inputClass =
-  "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25";
+  "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** Settings row: what it is and why it matters on the left, controls on the right. */
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mt-8">
-      <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</h2>
-      <div className="mt-3 space-y-4 rounded-xl border border-border bg-card p-5">{children}</div>
+    <section className="mt-10 grid gap-4 md:grid-cols-[220px_1fr] md:gap-8">
+      <div>
+        <h2 className="text-[15px] font-semibold">{title}</h2>
+        {description && (
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+        )}
+      </div>
+      <div className="space-y-4 rounded-xl border border-border bg-card p-5">{children}</div>
     </section>
   );
 }
@@ -357,7 +367,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      <span className="mb-1.5 block text-[13px] font-medium">{label}</span>
       {children}
     </label>
   );

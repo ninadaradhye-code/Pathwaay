@@ -1,4 +1,5 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { AppShell } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -31,5 +32,19 @@ export const Route = createFileRoute("/_authenticated")({
 
     return { user: data.user };
   },
-  component: () => <Outlet />,
+  component: SignedInLayout,
 });
+
+// Video rooms, private sessions and the moderation console are full-screen;
+// every other signed-in page sits in the shared shell (sidebar / bottom tabs).
+const FULL_SCREEN = ["/classroom/", "/session/", "/room/", "/admin"];
+
+function SignedInLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  if (FULL_SCREEN.some((p) => pathname.startsWith(p))) return <Outlet />;
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  );
+}
