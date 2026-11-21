@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PathwaayMark } from "@/components/brand";
 import { RatingModal } from "@/components/rating-modal";
 import { usePrivateSession } from "@/lib/use-private-session";
+import { useCameraModeration, type RemovalReason } from "@/lib/use-camera-moderation";
 import { PRIVATE_SESSION_MAX, type SessionPeer } from "@/lib/private-session";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,51 @@ function PrivateSessionPage() {
   };
   const onAudioBlocked = useCallback(() => setAudioBlocked(true), []);
 
+  // Same camera rules as the classroom, minus the away timer: phone in view
+  // three times, or explicit content, ends your part in the session.
+  const [removedFor, setRemovedFor] = useState<Exclude<RemovalReason, "away"> | null>(null);
+  const { leave: leaveSession, localVideo } = s;
+  const moderation = useCameraModeration({
+    track: s.status === "live" && s.camOn && !removedFor ? localVideo : null,
+    awayCheck: false,
+    onRemove: (reason) => {
+      if (reason === "away") return;
+      if (reason === "nsfw") localVideo?.stop();
+      setRemovedFor(reason);
+      void leaveSession();
+      void supabase.auth.getUser().then(({ data }) => {
+        if (!data.user) return;
+        void supabase
+          .from("reports")
+          .insert({
+            reporter_id: data.user.id,
+            reported_user_id: data.user.id,
+            reason: "other",
+            notes:
+              reason === "phone"
+                ? "Auto-flagged: phone in view 3 times in a private session"
+                : "Auto-flagged by camera moderation in a private session: explicit content",
+          })
+          .then(
+            () => undefined,
+            () => undefined,
+          );
+      });
+    },
+  });
+  const lastIncident = useRef(0);
+  useEffect(() => {
+    if (moderation.phoneIncidents > lastIncident.current) {
+      lastIncident.current = moderation.phoneIncidents;
+      if (moderation.phoneIncidents < moderation.phoneIncidentsMax) {
+        toast.warning(
+          `Phone in view (${moderation.phoneIncidents} of ${moderation.phoneIncidentsMax}). Put it away. The third time removes you.`,
+          { id: "phone-warning" },
+        );
+      }
+    }
+  }, [moderation.phoneIncidents, moderation.phoneIncidentsMax]);
+
   // Tell people when the host mutes or unmutes them.
   const prevMuted = useRef(false);
   useEffect(() => {
@@ -117,6 +163,32 @@ function PrivateSessionPage() {
       setBusy(false);
     }
   };
+
+  if (removedFor) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-room px-6 text-center text-white">
+        <div className="max-w-sm">
+          <PathwaayMark className="mx-auto h-12 w-12" />
+          <h1 className="mt-4 text-lg font-bold">
+            {removedFor === "phone"
+              ? "Removed for using a phone"
+              : "Removed for inappropriate content"}
+          </h1>
+          <p className="mt-2 text-sm text-white/60">
+            {removedFor === "phone"
+              ? "A phone was in view three separate times. Keep it out of sight in sessions and classrooms."
+              : "Your camera showed content that isn't allowed, so it was turned off. A moderator will review this."}
+          </p>
+          <button
+            onClick={backToClassroom}
+            className="mt-6 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            {classroomId ? "Back to classroom" : "Go home"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (s.status === "left" || rateOpen) {
     return (

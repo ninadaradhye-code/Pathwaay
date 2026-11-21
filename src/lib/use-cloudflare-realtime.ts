@@ -1,32 +1,337 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { heartbeatClassroomVideo, leaveClassroomVideo, openRealtimeSession, pullRealtimeTracks, pushRealtimeTracks, renegotiateRealtime } from "@/lib/cloudflare-realtime.functions";
-import { CAMERA_CONSTRAINTS, CAMERA_ENCODINGS, type ClassroomVideo, type LiveStatus, type Peer } from "@/lib/classroom-video";
+import {
+  closeRealtimeTracks,
+  heartbeatClassroomVideo,
+  leaveClassroomVideo,
+  openRealtimeSession,
+  pullRealtimeTracks,
+  pushRealtimeTracks,
+  renegotiateRealtime,
+} from "@/lib/cloudflare-realtime.functions";
+import {
+  CAMERA_CONSTRAINTS,
+  CAMERA_ENCODINGS,
+  type ClassroomVideo,
+  type LiveStatus,
+  type Peer,
+} from "@/lib/classroom-video";
 
-type Meta={userId:string;name:string;sessionId:string;camTrack:string};
-export function useCloudflareRealtime(opts:{classId:string|null;accessToken:string|null;identity:string|null;name:string;onDisconnected:()=>void}):ClassroomVideo {
- const {classId,accessToken,identity,name,onDisconnected}=opts;
- const [status,setStatus]=useState<LiveStatus>("connecting"),[error,setError]=useState<string|null>(null),[peers,setPeers]=useState<Peer[]>([]),[localVideo,setLocalVideo]=useState<MediaStreamTrack|null>(null),[warningCount,setWarningCount]=useState(0),[removed,setRemoved]=useState(false);
- const pcRef=useRef<RTCPeerConnection|null>(null), ticketRef=useRef<string|null>(null), streamRef=useRef<MediaStream|null>(null), channelRef=useRef<ReturnType<typeof supabase.channel>|null>(null);
- const leaving=useRef(false);
- useEffect(()=>{if(!classId||!accessToken||!identity)return; let disposed=false; const roster=new Map<string,Meta>(), media=new Map<string,MediaStreamTrack>(), pulled=new Set<string>(), mids=new Map<string,string>(); let pullTimer:number|undefined;
-  const sync=()=>setPeers([...roster.values()].map(m=>({identity:m.userId,name:m.name||"Student",video:media.get(m.userId)})));
-  const clean=()=>{window.clearInterval(heartbeat);window.clearTimeout(pullTimer);streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;pcRef.current?.close();pcRef.current=null;const c=channelRef.current;channelRef.current=null;if(c)void c.untrack().then(()=>supabase.removeChannel(c));};
-  const heartbeat=window.setInterval(()=>void checkCamera(),5000);
-  const checkCamera=async()=>{const ticket=ticketRef.current,track=streamRef.current?.getVideoTracks()[0];if(!ticket||!track||disposed)return;try{const active=track.enabled&&track.readyState==="live"&&!track.muted;const r=await heartbeatClassroomVideo({data:{ticket,cameraOn:active}});if(disposed)return;setWarningCount(r.warning_count);if(r.status==="kicked"){setRemoved(true);setError("You were removed because your camera remained off.");setStatus("error");clean();} }catch(e){if(!disposed){setError("Connection to the classroom was lost. Please rejoin.");setStatus("error");}}};
-  const pull=async()=>{const pc=pcRef.current,ticket=ticketRef.current;if(!pc||!ticket)return;const wanted=[...roster.values()].filter(m=>m.userId!==identity&&!pulled.has(m.userId));if(!wanted.length)return;wanted.forEach(m=>pulled.add(m.userId));try{const r=await pullRealtimeTracks({data:{ticket,tracks:wanted.map(m=>({location:"remote" as const,sessionId:m.sessionId,trackName:m.camTrack,simulcast:{preferredRid:"q"}}))}}) as {tracks:Array<{mid?:string,errorCode?:string}>;requiresImmediateRenegotiation?:boolean;sessionDescription?:RTCSessionDescriptionInit};r.tracks.forEach((t,i)=>{if(t.errorCode)pulled.delete(wanted[i].userId);else if(t.mid)mids.set(t.mid,wanted[i].userId);});if(r.requiresImmediateRenegotiation&&r.sessionDescription){await pc.setRemoteDescription(r.sessionDescription);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);await renegotiateRealtime({data:{ticket,sdp:answer.sdp??""}});}}catch{wanted.forEach(m=>pulled.delete(m.userId));}};
-  const schedulePull=()=>{window.clearTimeout(pullTimer);pullTimer=window.setTimeout(()=>void pull(),250);};
-  const run=async()=>{const stream=await navigator.mediaDevices.getUserMedia({video:CAMERA_CONSTRAINTS,audio:false});if(disposed){stream.getTracks().forEach(t=>t.stop());return;}const camera=stream.getVideoTracks()[0];if(!camera)throw new Error("A camera is required to join this classroom.");streamRef.current=stream;setLocalVideo(camera);camera.addEventListener("ended",()=>void checkCamera());camera.addEventListener("mute",()=>window.setTimeout(()=>void checkCamera(),5000));
-   const opened=await openRealtimeSession({data:{classId,accessToken}});if(disposed)return;ticketRef.current=opened.ticket;const pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.cloudflare.com:3478"}],bundlePolicy:"max-bundle"});pcRef.current=pc;
-   pc.ontrack=e=>{const owner=e.transceiver.mid?mids.get(e.transceiver.mid):undefined;if(owner){media.set(owner,e.track);sync();}};pc.oniceconnectionstatechange=()=>{if(pc.iceConnectionState==="connected")setStatus("connected");if(pc.iceConnectionState==="failed"){setStatus("reconnecting");window.setTimeout(()=>{if(!disposed)window.location.reload();},1500);}};
-   const sender=pc.addTransceiver(camera,{direction:"sendonly",sendEncodings:CAMERA_ENCODINGS});const offer=await pc.createOffer();await pc.setLocalDescription(offer);const pushed=await pushRealtimeTracks({data:{ticket:opened.ticket,sdp:offer.sdp??"",tracks:[{location:"local",mid:sender.mid??undefined,trackName:`cam-${identity}`}]}}) as {sessionDescription:RTCSessionDescriptionInit};await pc.setRemoteDescription(pushed.sessionDescription);
-   const channel=supabase.channel(`cfrt:${classId}`,{config:{presence:{key:identity}}});channelRef.current=channel;channel.on("presence",{event:"sync"},()=>{const state=channel.presenceState<Meta>();roster.clear();Object.values(state).flat().forEach(m=>{if(m.userId&&m.userId!==identity)roster.set(m.userId,m);});[...media.keys()].forEach(id=>{if(!roster.has(id))media.delete(id);});sync();schedulePull();});await channel.subscribe(async s=>{if(s==="SUBSCRIBED")await channel.track({userId:identity,name,sessionId:opened.sessionId,camTrack:`cam-${identity}`});});setStatus("connected");await checkCamera();
-  };void run().catch(e=>{if(!disposed){const msg=e instanceof Error?e.message:"";console.error("[classroom-video] join failed",e);const safe=/permission|notallowed|denied/i.test(msg)?"Camera permission is required to join this classroom.":/claim_classroom_video_seat|heartbeat_classroom_video|classroom_video_participants|schema cache/i.test(msg)?"Classroom video is being set up. An administrator must apply the classroom video database migration before it can be used.":/CF_REALTIME|Cloudflare Realtime is not configured|server configuration is incomplete/i.test(msg)?"Classroom video has not been configured on the server yet.":/classroom is full/i.test(msg)?"This classroom is full (30 participants).":/removed because your camera/i.test(msg)?"You were removed because your camera remained off.":"Could not connect to classroom video. Please try again.";setError(safe);setStatus("error");}});
-  return()=>{disposed=true;clean();};
- },[classId,accessToken,identity,name]);
- const leave=useCallback(async()=>{if(leaving.current)return;leaving.current=true;const t=ticketRef.current;if(t)await leaveClassroomVideo({data:{ticket:t}}).catch(()=>undefined);streamRef.current?.getTracks().forEach(x=>x.stop());pcRef.current?.close();onDisconnected();},[onDisconnected]);
- // Leave the classroom without navigating — used when stepping into a private
- // session, so the seat is freed straight away instead of after the 75s timeout.
- const release=useCallback(async()=>{if(leaving.current)return;leaving.current=true;const t=ticketRef.current;ticketRef.current=null;if(t)await leaveClassroomVideo({data:{ticket:t}}).catch(()=>undefined);streamRef.current?.getTracks().forEach(x=>x.stop());pcRef.current?.close();},[]);
- return {status,error,peers,localVideo,warningCount,removed,leave,release};
+type Meta = { userId: string; name: string; sessionId: string; camTrack: string };
+
+/**
+ * Classroom video on the Cloudflare Realtime SFU.
+ *
+ * Everyone publishes their camera once. Each browser receives video only for
+ * the people currently on screen (`visibleIds`): paging the grid closes the
+ * tracks that scrolled off and pulls the new ones. Receiving and decoding all
+ * 29 other cameras at once is what made large classrooms lag.
+ */
+export function useCloudflareRealtime(opts: {
+  classId: string | null;
+  accessToken: string | null;
+  identity: string | null;
+  name: string;
+  onDisconnected: () => void;
+  /** User ids whose video should be received. null = everyone. */
+  visibleIds?: string[] | null;
+}): ClassroomVideo {
+  const { classId, accessToken, identity, name, onDisconnected, visibleIds = null } = opts;
+  const [status, setStatus] = useState<LiveStatus>("connecting");
+  const [error, setError] = useState<string | null>(null);
+  const [peers, setPeers] = useState<Peer[]>([]);
+  const [localVideo, setLocalVideo] = useState<MediaStreamTrack | null>(null);
+  const [warningCount, setWarningCount] = useState(0);
+  const [removed, setRemoved] = useState(false);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const ticketRef = useRef<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const leaving = useRef(false);
+  const visibleRef = useRef<Set<string> | null>(visibleIds ? new Set(visibleIds) : null);
+  const applyVisibleRef = useRef<(() => void) | null>(null);
+
+  // Stable key so a new array with the same ids does not re-trigger.
+  const visibleKey = visibleIds ? [...visibleIds].sort().join(",") : "*";
+  useEffect(() => {
+    visibleRef.current = visibleIds ? new Set(visibleIds) : null;
+    applyVisibleRef.current?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKey]);
+
+  useEffect(() => {
+    if (!classId || !accessToken || !identity) return;
+    let disposed = false;
+    const roster = new Map<string, Meta>();
+    const media = new Map<string, MediaStreamTrack>();
+    const pulled = new Set<string>();
+    const mids = new Map<string, string>(); // mid -> userId
+    let pullTimer: number | undefined;
+    // Cloudflare renegotiations must not overlap.
+    let queue: Promise<void> = Promise.resolve();
+    const enqueue = (job: () => Promise<void>) => {
+      queue = queue.then(job).catch(() => undefined);
+    };
+
+    const isVisible = (id: string) => !visibleRef.current || visibleRef.current.has(id);
+
+    const sync = () =>
+      setPeers(
+        [...roster.values()].map((m) => ({
+          identity: m.userId,
+          name: m.name || "Student",
+          video: media.get(m.userId),
+        })),
+      );
+
+    const clean = () => {
+      window.clearInterval(heartbeat);
+      window.clearTimeout(pullTimer);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      pcRef.current?.close();
+      pcRef.current = null;
+      const c = channelRef.current;
+      channelRef.current = null;
+      if (c) void c.untrack().then(() => supabase.removeChannel(c));
+    };
+
+    const checkCamera = async () => {
+      const ticket = ticketRef.current;
+      const track = streamRef.current?.getVideoTracks()[0];
+      if (!ticket || !track || disposed) return;
+      try {
+        const active = track.enabled && track.readyState === "live" && !track.muted;
+        const r = await heartbeatClassroomVideo({ data: { ticket, cameraOn: active } });
+        if (disposed) return;
+        setWarningCount(r.warning_count);
+        if (r.status === "kicked") {
+          setRemoved(true);
+          setError("You were removed because your camera remained off.");
+          setStatus("error");
+          clean();
+        }
+      } catch {
+        if (!disposed) {
+          setError("Connection to the classroom was lost. Please rejoin.");
+          setStatus("error");
+        }
+      }
+    };
+    const heartbeat = window.setInterval(() => void checkCamera(), 5000);
+
+    const pull = async () => {
+      const pc = pcRef.current;
+      const ticket = ticketRef.current;
+      if (!pc || !ticket || disposed) return;
+      const wanted = [...roster.values()].filter(
+        (m) => m.userId !== identity && !pulled.has(m.userId) && isVisible(m.userId),
+      );
+      if (!wanted.length) return;
+      wanted.forEach((m) => pulled.add(m.userId));
+      try {
+        const r = (await pullRealtimeTracks({
+          data: {
+            ticket,
+            tracks: wanted.map((m) => ({
+              location: "remote" as const,
+              sessionId: m.sessionId,
+              trackName: m.camTrack,
+              simulcast: { preferredRid: "q" },
+            })),
+          },
+        })) as {
+          tracks: Array<{ mid?: string; errorCode?: string }>;
+          requiresImmediateRenegotiation?: boolean;
+          sessionDescription?: RTCSessionDescriptionInit;
+        };
+        r.tracks.forEach((t, i) => {
+          if (t.errorCode) pulled.delete(wanted[i].userId);
+          else if (t.mid) mids.set(t.mid, wanted[i].userId);
+        });
+        if (r.requiresImmediateRenegotiation && r.sessionDescription) {
+          await pc.setRemoteDescription(r.sessionDescription);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await renegotiateRealtime({ data: { ticket, sdp: answer.sdp ?? "" } });
+        }
+      } catch {
+        wanted.forEach((m) => pulled.delete(m.userId));
+      }
+    };
+
+    // Stop receiving anyone who is no longer on screen (or has left).
+    const dropHidden = async () => {
+      const ticket = ticketRef.current;
+      if (!ticket || disposed) return;
+      const drop = [...pulled].filter((id) => !isVisible(id) || !roster.has(id));
+      if (!drop.length) return;
+      const closing: string[] = [];
+      for (const [mid, uid] of mids) {
+        if (drop.includes(uid)) {
+          closing.push(mid);
+          mids.delete(mid);
+        }
+      }
+      drop.forEach((id) => {
+        pulled.delete(id);
+        media.delete(id);
+      });
+      sync();
+      if (closing.length) {
+        await closeRealtimeTracks({ data: { ticket, mids: closing.slice(0, 30) } }).catch(
+          () => undefined,
+        );
+      }
+    };
+
+    const reconcile = () => {
+      window.clearTimeout(pullTimer);
+      pullTimer = window.setTimeout(() => {
+        enqueue(dropHidden);
+        enqueue(pull);
+      }, 250);
+    };
+    applyVisibleRef.current = reconcile;
+
+    const run = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: CAMERA_CONSTRAINTS,
+        audio: false,
+      });
+      if (disposed) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      const camera = stream.getVideoTracks()[0];
+      if (!camera) throw new Error("A camera is required to join this classroom.");
+      streamRef.current = stream;
+      setLocalVideo(camera);
+      camera.addEventListener("ended", () => void checkCamera());
+      camera.addEventListener("mute", () => window.setTimeout(() => void checkCamera(), 5000));
+
+      const opened = await openRealtimeSession({ data: { classId, accessToken } });
+      if (disposed) return;
+      ticketRef.current = opened.ticket;
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+        bundlePolicy: "max-bundle",
+      });
+      pcRef.current = pc;
+      pc.ontrack = (e) => {
+        const owner = e.transceiver.mid ? mids.get(e.transceiver.mid) : undefined;
+        if (owner) {
+          media.set(owner, e.track);
+          sync();
+        }
+      };
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === "connected") setStatus("connected");
+        if (pc.iceConnectionState === "failed") {
+          setStatus("reconnecting");
+          window.setTimeout(() => {
+            if (!disposed) window.location.reload();
+          }, 1500);
+        }
+      };
+
+      const sender = pc.addTransceiver(camera, {
+        direction: "sendonly",
+        sendEncodings: CAMERA_ENCODINGS,
+      });
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const pushed = (await pushRealtimeTracks({
+        data: {
+          ticket: opened.ticket,
+          sdp: offer.sdp ?? "",
+          tracks: [
+            { location: "local", mid: sender.mid ?? undefined, trackName: `cam-${identity}` },
+          ],
+        },
+      })) as { sessionDescription: RTCSessionDescriptionInit };
+      await pc.setRemoteDescription(pushed.sessionDescription);
+
+      const channel = supabase.channel(`cfrt:${classId}`, {
+        config: { presence: { key: identity } },
+      });
+      channelRef.current = channel;
+      channel.on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<Meta>();
+        roster.clear();
+        Object.values(state)
+          .flat()
+          .forEach((m) => {
+            if (m.userId && m.userId !== identity) roster.set(m.userId, m);
+          });
+        sync();
+        reconcile();
+      });
+      await channel.subscribe(async (s) => {
+        if (s === "SUBSCRIBED")
+          await channel.track({
+            userId: identity,
+            name,
+            sessionId: opened.sessionId,
+            camTrack: `cam-${identity}`,
+          });
+      });
+      setStatus("connected");
+      await checkCamera();
+    };
+
+    void run().catch((e) => {
+      if (disposed) return;
+      const msg = e instanceof Error ? e.message : "";
+      console.error("[classroom-video] join failed", e);
+      const safe = /permission|notallowed|denied/i.test(msg)
+        ? "Camera permission is required to join this classroom."
+        : /claim_classroom_video_seat|heartbeat_classroom_video|classroom_video_participants|schema cache/i.test(
+              msg,
+            )
+          ? "Classroom video is being set up. An administrator must apply the classroom video database migration before it can be used."
+          : /CF_REALTIME|Cloudflare Realtime is not configured|server configuration is incomplete/i.test(
+                msg,
+              )
+            ? "Classroom video has not been configured on the server yet."
+            : /classroom is full/i.test(msg)
+              ? "This classroom is full (30 participants)."
+              : /removed because your camera/i.test(msg)
+                ? "You were removed because your camera remained off."
+                : "Could not connect to classroom video. Please try again.";
+      setError(safe);
+      setStatus("error");
+    });
+
+    return () => {
+      disposed = true;
+      applyVisibleRef.current = null;
+      clean();
+    };
+  }, [classId, accessToken, identity, name]);
+
+  const leave = useCallback(async () => {
+    if (leaving.current) return;
+    leaving.current = true;
+    const t = ticketRef.current;
+    if (t) await leaveClassroomVideo({ data: { ticket: t } }).catch(() => undefined);
+    streamRef.current?.getTracks().forEach((x) => x.stop());
+    pcRef.current?.close();
+    onDisconnected();
+  }, [onDisconnected]);
+
+  // Leave the classroom without navigating — used when stepping into a private
+  // session, so the seat is freed straight away instead of after the 75s timeout.
+  const release = useCallback(async () => {
+    if (leaving.current) return;
+    leaving.current = true;
+    const t = ticketRef.current;
+    ticketRef.current = null;
+    if (t) await leaveClassroomVideo({ data: { ticket: t } }).catch(() => undefined);
+    streamRef.current?.getTracks().forEach((x) => x.stop());
+    pcRef.current?.close();
+  }, []);
+
+  return { status, error, peers, localVideo, warningCount, removed, leave, release };
 }

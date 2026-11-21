@@ -17,4 +17,7 @@ export default defineConfig({
   // Worker that Vercel can't run. Vercel's CI auto-detects itself, but pinning
   // it here keeps local builds identical to production.
   nitro: { preset: "vercel" },
+  // The camera-moderation worker loads its models lazily (code-split), which
+  // needs ES-module workers rather than the default single-file IIFE.
+  vite: { worker: { format: "es" } },
 });

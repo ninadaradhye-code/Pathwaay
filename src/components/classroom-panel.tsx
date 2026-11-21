@@ -55,7 +55,9 @@ interface Invite {
   created_at: string;
 }
 
-const REFRESH_MS = 8000;
+// Safety-net re-sync. Live changes already arrive over realtime, so this only
+// catches anything missed; more often just loads every student's connection.
+const REFRESH_MS = 20000;
 const MAX_MESSAGES = 200;
 const MESSAGE_FIELDS = "id, author_id, author_name, kind, body, resolved_at, created_at";
 

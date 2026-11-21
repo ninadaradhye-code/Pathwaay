@@ -1,11 +1,24 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, MessageSquare, PhoneOff, Users, Video, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  MessageSquare,
+  PhoneOff,
+  Smartphone,
+  UserX,
+  Users,
+  Video,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PathwaayMark } from "@/components/brand";
 import { ClassroomPanel } from "@/components/classroom-panel";
 import { authorizeClassroom } from "@/lib/classroom-video.functions";
 import { useCloudflareRealtime } from "@/lib/use-cloudflare-realtime";
+import { useCameraModeration, type RemovalReason } from "@/lib/use-camera-moderation";
 import { cn } from "@/lib/utils";
 
 // Set while walking from this classroom into one of its private sessions, which
@@ -35,6 +48,24 @@ export const Route = createFileRoute("/_authenticated/classroom/$classId")({
     void withdrawMessages(classId);
   },
 });
+
+/** Tiles on one page of the grid, including your own. */
+const PAGE_SIZE = 15;
+
+const REMOVAL_MESSAGE: Record<RemovalReason, { title: string; body: string }> = {
+  away: {
+    title: "Removed for being away",
+    body: "You weren't on camera for over 3 minutes, so your seat was given back. Rejoin whenever you're ready to study.",
+  },
+  phone: {
+    title: "Removed for using a phone",
+    body: "A phone was in view three separate times. Phones aren't allowed in classrooms; keep yours out of sight and rejoin.",
+  },
+  nsfw: {
+    title: "Removed for inappropriate content",
+    body: "Your camera showed content that isn't allowed, so it was turned off and you were removed. A moderator will review this.",
+  },
+};
 
 type Session = {
   isModerator: boolean;
@@ -78,13 +109,91 @@ function Classroom() {
       .then(({ data }) => setToken(data.session?.access_token ?? null));
   }, []);
 
+  // Paging: only the people on the current page are received and shown.
+  const [page, setPage] = useState(0);
+  const [peerOrder, setPeerOrder] = useState<string[]>([]);
+  const perPage = PAGE_SIZE - 1; // your own tile is on every page
+  const pageCount = Math.max(1, Math.ceil(peerOrder.length / perPage));
+  const safePage = Math.min(page, pageCount - 1);
+  const visibleIds = useMemo(
+    () => peerOrder.slice(safePage * perPage, safePage * perPage + perPage),
+    [peerOrder, safePage, perPage],
+  );
+
   const live = useCloudflareRealtime({
     classId: session ? classId : null,
     accessToken: session ? token : null,
     identity: session?.identity ?? null,
     name: session?.name ?? "Student",
     onDisconnected: () => nav({ to: "/home" }),
+    visibleIds,
   });
+
+  // A stable order (by name), so pages don't reshuffle as people join.
+  const sortedPeers = useMemo(
+    () =>
+      [...live.peers].sort(
+        (a, b) => a.name.localeCompare(b.name) || a.identity.localeCompare(b.identity),
+      ),
+    [live.peers],
+  );
+  const orderKey = sortedPeers.map((p) => p.identity).join(",");
+  useEffect(() => {
+    setPeerOrder(orderKey ? orderKey.split(",") : []);
+  }, [orderKey]);
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+  const pagePeers = sortedPeers.filter((p) => visibleIds.includes(p.identity));
+
+  // Camera moderation: away, phone, explicit content.
+  const [removedFor, setRemovedFor] = useState<RemovalReason | null>(null);
+  const { release: releaseSeat, localVideo } = live;
+  const onRemove = useCallback(
+    async (reason: RemovalReason) => {
+      if (reason === "nsfw") localVideo?.stop(); // cut the feed first
+      setRemovedFor(reason);
+      const { data } = await supabase.auth.getUser();
+      if (data.user && reason !== "away") {
+        await supabase
+          .from("reports")
+          .insert({
+            reporter_id: data.user.id,
+            reported_user_id: data.user.id,
+            reason: "other",
+            notes:
+              reason === "phone"
+                ? "Auto-flagged: phone in view 3 times in a classroom"
+                : "Auto-flagged by camera moderation: explicit content",
+          })
+          .then(
+            () => undefined,
+            () => undefined,
+          );
+      }
+      await withdrawMessages(classId);
+      await releaseSeat();
+    },
+    [classId, localVideo, releaseSeat],
+  );
+  const moderation = useCameraModeration({
+    track: live.status === "connected" && !removedFor ? localVideo : null,
+    awayCheck: true,
+    onRemove: (r) => void onRemove(r),
+  });
+
+  // Tell people straight away when a phone is spotted.
+  const lastIncident = useRef(0);
+  useEffect(() => {
+    if (moderation.phoneIncidents > lastIncident.current) {
+      lastIncident.current = moderation.phoneIncidents;
+      if (moderation.phoneIncidents < moderation.phoneIncidentsMax) {
+        toast.warning("Put your phone away. Phones aren't allowed in classrooms.", {
+          id: "phone-warning",
+        });
+      }
+    }
+  }, [moderation.phoneIncidents, moderation.phoneIncidentsMax]);
 
   // Chat/sessions panel: always beside the video on wide screens, a slide-over
   // on phones.
@@ -103,6 +212,17 @@ function Classroom() {
     [release, nav, classId],
   );
 
+  if (removedFor) {
+    const m = REMOVAL_MESSAGE[removedFor];
+    return (
+      <Failure
+        title={m.title}
+        message={m.body}
+        removed={false}
+        onHome={() => nav({ to: "/home" })}
+      />
+    );
+  }
   const error = authError ?? live.error;
   if (error) {
     return <Failure message={error} removed={live.removed} onHome={() => nav({ to: "/home" })} />;
@@ -141,12 +261,25 @@ function Classroom() {
       </header>
 
       {live.warningCount > 0 && (
-        <div
-          role="alert"
-          className="mx-auto mt-3 w-[min(680px,calc(100%-24px))] rounded-lg border border-amber-400/40 bg-amber-500/15 px-4 py-3 text-center text-sm text-amber-100"
-        >
-          Your camera must remain ON to stay in this classroom. Warning {live.warningCount} of 3.
-        </div>
+        <Banner icon={<Video className="h-4 w-4" />}>
+          Turn your camera back on to stay in this classroom. Warning {live.warningCount} of 3.
+        </Banner>
+      )}
+      {moderation.awaySecondsLeft !== null && (
+        <Banner icon={<UserX className="h-4 w-4" />}>
+          We can't see you on camera. Come back into view, or you'll be removed in{" "}
+          <span className="font-semibold tabular-nums">
+            {Math.floor(moderation.awaySecondsLeft / 60)}:
+            {String(moderation.awaySecondsLeft % 60).padStart(2, "0")}
+          </span>
+          .
+        </Banner>
+      )}
+      {moderation.phoneInFrame && (
+        <Banner icon={<Smartphone className="h-4 w-4" />} tone="danger">
+          Phone in view ({moderation.phoneIncidents} of {moderation.phoneIncidentsMax}). Put it
+          away. The third time removes you from the classroom.
+        </Banner>
       )}
 
       <div className="flex min-h-0 flex-1">
@@ -162,12 +295,43 @@ function Classroom() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
-              <Tile name="You" track={live.localVideo} me />
-              {live.peers.map((p) => (
-                <Tile key={p.identity} name={p.name} track={p.video} />
-              ))}
-            </div>
+            <>
+              {pageCount > 1 && (
+                <div className="mb-3 flex items-center justify-between gap-3 text-[13px] text-white/60">
+                  <span>
+                    Classmates {safePage * perPage + 1}–
+                    {Math.min((safePage + 1) * perPage, sortedPeers.length)} of {sortedPeers.length}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={safePage === 0}
+                      aria-label="Previous classmates"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-30"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <span className="min-w-[3.5rem] text-center tabular-nums">
+                      {safePage + 1} / {pageCount}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                      disabled={safePage >= pageCount - 1}
+                      aria-label="Next classmates"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 hover:bg-white/15 disabled:opacity-30"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <Tile name="You" track={live.localVideo} me />
+                {pagePeers.map((p) => (
+                  <Tile key={p.identity} name={p.name} track={p.video} />
+                ))}
+              </div>
+            </>
           )}
         </main>
 
@@ -276,11 +440,38 @@ function Tile({
   );
 }
 
+function Banner({
+  icon,
+  tone = "warn",
+  children,
+}: {
+  icon: React.ReactNode;
+  tone?: "warn" | "danger";
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "mx-auto mt-3 flex w-[min(720px,calc(100%-24px))] items-start gap-2.5 rounded-lg px-4 py-3 text-[14px] ring-1",
+        tone === "danger"
+          ? "bg-danger/15 text-red-100 ring-danger/40"
+          : "bg-doubt/15 text-amber-100 ring-doubt/40",
+      )}
+    >
+      <span className="mt-0.5 shrink-0">{icon}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
 function Failure({
+  title,
   message,
   removed,
   onHome,
 }: {
+  title?: string;
   message: string;
   removed: boolean;
   onHome: () => void;
@@ -289,7 +480,7 @@ function Failure({
     <div className="flex h-[100dvh] items-center justify-center bg-room px-6 text-center text-white">
       <div>
         <h1 className="text-lg font-bold">
-          {removed ? "Removed from classroom" : "Couldn't join the classroom"}
+          {title ?? (removed ? "Removed from classroom" : "Couldn't join the classroom")}
         </h1>
         <p className="mt-2 max-w-sm text-sm text-white/60">{message}</p>
         {removed && (

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { usePlan } from "@/lib/plan-context";
 import { EmptyState, LiveDot, PageBody, PageHeader, Section } from "@/components/app-shell";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/home")({
@@ -177,13 +178,20 @@ function Home() {
     };
 
     void load();
+    let reloadTimer: number | undefined;
 
     // Live counts rather than waiting on the poll. The interval stays as a
     // backstop for a dropped socket, but at a much lower rate.
     const channel = supabase
-      .channel("home:presence")
+      .channel(`home:presence:${crypto.randomUUID()}`)
+      // Every presence heartbeat on the platform lands here, so coalesce them:
+      // at most one reload every 10 seconds instead of one per event.
       .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, () => {
-        void load();
+        if (reloadTimer) return;
+        reloadTimer = window.setTimeout(() => {
+          reloadTimer = undefined;
+          void load();
+        }, 10_000);
       })
       .subscribe();
 
@@ -192,6 +200,7 @@ function Home() {
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.clearTimeout(reloadTimer);
       void supabase.removeChannel(channel);
     };
   }, []);
@@ -208,6 +217,7 @@ function Home() {
     <>
       <PageHeader
         title={`${greeting}, ${firstName}`}
+        actions={<ThemeToggle />}
         description={
           totalLive > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-x-2">
