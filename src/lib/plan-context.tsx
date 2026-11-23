@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type Role = "user" | "admin";
+export type Role = "user" | "moderator" | "admin";
 export type Theme = "light" | "dark";
 
 export interface UserProfile {
@@ -66,8 +66,8 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         avatar: prof.avatar_url ?? undefined,
       });
     }
-    const isAdmin = (roles ?? []).some((r) => r.role === "admin");
-    setRoleState(isAdmin ? "admin" : "user");
+    const has = (r: string) => (roles ?? []).some((x) => x.role === r);
+    setRoleState(has("admin") ? "admin" : has("moderator") ? "moderator" : "user");
   };
 
   useEffect(() => {

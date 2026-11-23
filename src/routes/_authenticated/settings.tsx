@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Camera, LogOut, Moon, Sun, Trash2 } from "lucide-react";
+import { Camera, LogOut, Moon, ShieldAlert, Sun, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlan } from "@/lib/plan-context";
 import { Avatar, PageBody, PageHeader } from "@/components/app-shell";
@@ -21,7 +21,7 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 function Settings() {
   const nav = useNavigate();
-  const { profile, setProfile, theme, setTheme } = usePlan();
+  const { profile, setProfile, theme, setTheme, role } = usePlan();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -325,7 +325,15 @@ function Settings() {
           </div>
         </Section>
 
-        <div className="mt-10 border-t border-border pt-6">
+        <div className="mt-10 flex flex-wrap gap-3 border-t border-border pt-6">
+          {(role === "admin" || role === "moderator") && (
+            <Link
+              to="/admin"
+              className="inline-flex items-center gap-2 rounded-lg border border-input px-5 py-2.5 text-sm font-semibold transition hover:bg-secondary"
+            >
+              <ShieldAlert className="h-4 w-4" /> Moderation console
+            </Link>
+          )}
           <button
             onClick={() => void signOut()}
             className="inline-flex items-center gap-2 rounded-lg border border-danger/30 px-5 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/10"

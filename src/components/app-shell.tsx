@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          {role === "admin" && (
+          {(role === "admin" || role === "moderator") && (
             <Link
               to="/admin"
               className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
