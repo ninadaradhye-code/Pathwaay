@@ -225,19 +225,69 @@ export function ClassroomPanel({
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
   }, [messages, tab]);
 
+  // Messages go through the server's abuse filter. Abusive messages are
+  // refused (a strike each); three strikes in 10 minutes mute the sender.
+  const [mutedUntil, setMutedUntil] = useState<number | null>(null);
+  useEffect(() => {
+    if (!mutedUntil) return;
+    const t = window.setTimeout(() => setMutedUntil(null), Math.max(0, mutedUntil - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [mutedUntil]);
+  const muted = mutedUntil !== null && mutedUntil > Date.now();
+
   const send = async () => {
     const body = draft.trim();
-    if (!body || !myUserId || sending) return;
+    if (!body || !myUserId || sending || muted) return;
     setSending(true);
-    const { error } = await supabase.from("classroom_messages").insert({
-      classroom_id: classId,
-      author_id: myUserId,
-      kind: asDoubt ? "doubt" : "chat",
-      body: body.slice(0, 1000),
+    const kind = asDoubt ? "doubt" : "chat";
+    let { data, error } = await supabase.rpc("post_classroom_message", {
+      _classroom_id: classId,
+      _kind: kind,
+      _body: body.slice(0, 1000),
     });
+    // Until 20261124090000_chat_abuse_filter is applied the function does not
+    // exist yet; post the old way so chat keeps working in the meantime.
+    if (
+      error &&
+      /post_classroom_message|schema cache|could not find the function/i.test(error.message)
+    ) {
+      const direct = await supabase.from("classroom_messages").insert({
+        classroom_id: classId,
+        author_id: myUserId,
+        kind,
+        body: body.slice(0, 1000),
+      });
+      error = direct.error;
+      data = { status: "sent" };
+    }
     setSending(false);
     if (error) {
       toast.error(friendly(error, "Message not sent."));
+      return;
+    }
+    const result = (data ?? {}) as {
+      status?: "sent" | "blocked" | "muted";
+      strikes?: number;
+      max?: number;
+      muted_until?: string;
+    };
+    if (result.status === "blocked") {
+      toast.error(
+        `Message not sent: abusive language isn't allowed. Warning ${result.strikes} of ${result.max}; the next ones mute you for 10 minutes.`,
+        { id: "chat-abuse" },
+      );
+      return;
+    }
+    if (result.status === "muted") {
+      const until = result.muted_until
+        ? new Date(result.muted_until).getTime()
+        : Date.now() + 600_000;
+      setMutedUntil(until);
+      setDraft("");
+      toast.error(
+        `You're muted until ${new Date(until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} for abusive language.`,
+        { id: "chat-abuse" },
+      );
       return;
     }
     stickToBottom.current = true;
@@ -531,12 +581,19 @@ export function ClassroomPanel({
                 }}
                 rows={1}
                 maxLength={1000}
-                placeholder={asDoubt ? "Describe your doubt…" : "Message the classroom…"}
+                disabled={muted}
+                placeholder={
+                  muted
+                    ? `Muted until ${new Date(mutedUntil!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} for abusive language`
+                    : asDoubt
+                      ? "Describe your doubt…"
+                      : "Message the classroom…"
+                }
                 className="max-h-28 min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none"
               />
               <button
                 type="submit"
-                disabled={!draft.trim() || sending}
+                disabled={!draft.trim() || sending || muted}
                 aria-label={asDoubt ? "Ask doubt" : "Send message"}
                 className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
               >

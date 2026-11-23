@@ -714,6 +714,10 @@ export type Database = {
         Returns: { user_id: string; name: string; invite_status: string | null; busy: boolean }[];
       };
       sweep_classroom_messages: { Args: { _classroom_id: string }; Returns: undefined };
+      post_classroom_message: {
+        Args: { _classroom_id: string; _kind: string; _body: string };
+        Returns: Json;
+      };
       withdraw_my_classroom_messages: { Args: { _classroom_id: string }; Returns: undefined };
       get_friends: {
         Args: { _user_id: string };
