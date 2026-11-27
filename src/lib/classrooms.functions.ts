@@ -10,7 +10,6 @@ const OPEN_TARGET = 3;
 // work each browser does. Back to the original 30 after the peer-to-peer mesh
 // forced it down to 6.
 const DEFAULT_CAPACITY = 30;
-const PRESENCE_WINDOW_MS = 2 * 60 * 1000;
 
 export const ensureOpenClassrooms = createServerFn({ method: "POST" })
   .validator((data) => z.object({ subject: z.string().min(1).max(100) }).parse(data))
@@ -32,17 +31,13 @@ export const ensureOpenClassrooms = createServerFn({ method: "POST" })
     const list = rooms ?? [];
     const ids = list.map((r) => r.id);
 
+    // Seats taken right now (private sessions don't hold a seat).
     let counts: Record<string, number> = {};
     if (ids.length) {
-      const { data: presence } = await supabaseAdmin
-        .from("user_presence")
-        .select("classroom_id")
-        .in("classroom_id", ids)
-        .gt("last_seen", new Date(Date.now() - PRESENCE_WINDOW_MS).toISOString());
-      counts = (presence ?? []).reduce<Record<string, number>>((acc, p) => {
-        if (p.classroom_id) acc[p.classroom_id] = (acc[p.classroom_id] ?? 0) + 1;
-        return acc;
-      }, {});
+      const { data: live } = await supabaseAdmin.rpc("get_live_headcounts", {
+        _subject_slug: data.subject,
+      });
+      counts = Object.fromEntries((live ?? []).map((r) => [r.classroom_id, Number(r.in_room)]));
     }
 
     const open = list.filter((r) => (counts[r.id] ?? 0) < r.capacity).length;

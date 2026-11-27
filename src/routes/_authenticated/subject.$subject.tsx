@@ -35,7 +35,10 @@ interface Classroom {
   room_number: number;
   capacity: number;
   is_verified: boolean;
+  /** People in the room's seats right now. */
   used: number;
+  /** People from this room who are in one of its private sessions. */
+  inPrivate: number;
 }
 
 function SubjectPage() {
@@ -73,18 +76,15 @@ function SubjectPage() {
       if (subjRes.data?.name) setName(subjRes.data.name);
       const rooms = roomsRes.data ?? [];
       const ids = rooms.map((r) => r.id);
-      let counts: Record<string, number> = {};
+      // Live seats + private sessions, from the classroom video leases.
+      const counts = new Map<string, { room: number; priv: number }>();
       if (ids.length) {
-        const { data: presence } = await supabase
-          .from("user_presence")
-          .select("classroom_id")
-          .in("classroom_id", ids)
-          .not("classroom_id", "is", null)
-          .gt("last_seen", new Date(Date.now() - 2 * 60 * 1000).toISOString());
-        counts = (presence ?? []).reduce<Record<string, number>>((acc, p) => {
-          if (p.classroom_id) acc[p.classroom_id] = (acc[p.classroom_id] ?? 0) + 1;
-          return acc;
-        }, {});
+        const { data: live } = await supabase.rpc("get_live_headcounts", {
+          _subject_slug: subject,
+        });
+        (live ?? []).forEach((r) =>
+          counts.set(r.classroom_id, { room: Number(r.in_room), priv: Number(r.in_private) }),
+        );
       }
       if (cancelled) return;
       setClassrooms(
@@ -93,34 +93,26 @@ function SubjectPage() {
           room_number: r.room_number,
           capacity: r.capacity,
           is_verified: r.is_verified,
-          used: Math.min(r.capacity, counts[r.id] ?? 0),
+          used: Math.min(r.capacity, counts.get(r.id)?.room ?? 0),
+          inPrivate: counts.get(r.id)?.priv ?? 0,
         })),
       );
       setLoading(false);
     };
 
     void load();
-    // Delete lapsed rows rather than only hiding them, so the realtime DELETE
-    // reaches everyone else watching this subject too.
-    void supabase.rpc("sweep_stale_presence").then(() => {
-      if (!cancelled) void load();
-    });
-
-    // Keep counts live and re-scale rooms as participants join/leave.
-    const channel = supabase
-      .channel(`subject:${subject}:presence`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, () => {
-        void load();
-      })
-      .subscribe();
+    // Counts come from heartbeats, so a short poll keeps them current without
+    // a realtime subscription per visitor.
+    const timer = window.setInterval(() => void load(), 15_000);
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      window.clearInterval(timer);
     };
   }, [subject]);
 
-  const liveCount = classrooms.reduce((sum, c) => sum + c.used, 0);
+  const liveCount = classrooms.reduce((sum, c) => sum + c.used + c.inPrivate, 0);
+  const privateCount = classrooms.reduce((sum, c) => sum + c.inPrivate, 0);
 
   // Always show every filled room, but never more than 3 joinable ones.
   const OPEN_LIMIT = 3;
@@ -148,6 +140,11 @@ function SubjectPage() {
             <span className="inline-flex items-center gap-1.5 font-medium text-success">
               <LiveDot />
               {liveCount} {liveCount === 1 ? "student" : "students"} studying now
+              {privateCount > 0 && (
+                <span className="font-normal text-muted-foreground">
+                  , {privateCount} of them in private help sessions
+                </span>
+              )}
             </span>
           ) : (
             "Join a classroom to study alongside others. Ask doubts in its chat, and help with theirs."
@@ -183,12 +180,12 @@ function SubjectPage() {
                     <div className="order-1 min-w-0 flex-1 sm:w-28 sm:flex-none">
                       <p className="text-[15px] font-semibold">Room {i + 1}</p>
                       <p className="text-[13px] text-muted-foreground">
-                        {c.is_verified
-                          ? "Verified host"
-                          : full
-                            ? "Full"
-                            : c.used === 0
-                              ? "Empty"
+                        {full
+                          ? "Full"
+                          : c.used + c.inPrivate === 0
+                            ? "Empty"
+                            : c.is_verified
+                              ? "Verified host"
                               : "Open"}
                       </p>
                     </div>
@@ -201,6 +198,11 @@ function SubjectPage() {
                             of {c.capacity} seats taken
                           </span>
                         </span>
+                        {c.inPrivate > 0 && (
+                          <span className="text-muted-foreground">
+                            +{c.inPrivate} in private {c.inPrivate === 1 ? "session" : "sessions"}
+                          </span>
+                        )}
                       </div>
                       <div
                         className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"

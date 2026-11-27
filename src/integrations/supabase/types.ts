@@ -714,6 +714,19 @@ export type Database = {
         Returns: { user_id: string; name: string; invite_status: string | null; busy: boolean }[];
       };
       sweep_classroom_messages: { Args: { _classroom_id: string }; Returns: undefined };
+      get_live_headcounts: {
+        Args: { _subject_slug?: string | null };
+        Returns: {
+          classroom_id: string;
+          subject_slug: string;
+          in_room: number;
+          in_private: number;
+        }[];
+      };
+      get_live_subject_headcounts: {
+        Args: Record<string, never>;
+        Returns: { subject_slug: string; in_room: number; in_private: number }[];
+      };
       post_classroom_message: {
         Args: { _classroom_id: string; _kind: string; _body: string };
         Returns: Json;

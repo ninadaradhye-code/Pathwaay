@@ -149,22 +149,12 @@ function Home() {
       if (cancelled) return;
 
       const subjectRows = courseSubjects ?? [];
-      const { data: classrooms } = await supabase.from("classrooms").select("id, subject_slug");
+      // People in classroom seats and in private sessions, per subject.
+      const { data: live } = await supabase.rpc("get_live_subject_headcounts");
       if (cancelled) return;
-
-      // One presence query for the whole page rather than per subject.
-      const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-      const { data: presence } = await supabase
-        .from("user_presence")
-        .select("classroom_id")
-        .gt("last_seen", since);
-      if (cancelled) return;
-
-      const roomToSubject = new Map((classrooms ?? []).map((c) => [c.id, c.subject_slug]));
       const liveBySubject = new Map<string, number>();
-      for (const p of presence ?? []) {
-        const slug = p.classroom_id ? roomToSubject.get(p.classroom_id) : null;
-        if (slug) liveBySubject.set(slug, (liveBySubject.get(slug) ?? 0) + 1);
+      for (const r of live ?? []) {
+        liveBySubject.set(r.subject_slug, Number(r.in_room) + Number(r.in_private));
       }
 
       setSubjects(
@@ -178,30 +168,14 @@ function Home() {
     };
 
     void load();
-    let reloadTimer: number | undefined;
-
-    // Live counts rather than waiting on the poll. The interval stays as a
-    // backstop for a dropped socket, but at a much lower rate.
-    const channel = supabase
-      .channel(`home:presence:${crypto.randomUUID()}`)
-      // Every presence heartbeat on the platform lands here, so coalesce them:
-      // at most one reload every 10 seconds instead of one per event.
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, () => {
-        if (reloadTimer) return;
-        reloadTimer = window.setTimeout(() => {
-          reloadTimer = undefined;
-          void load();
-        }, 10_000);
-      })
-      .subscribe();
-
-    const timer = window.setInterval(() => void load(), 60_000);
+    // Counts come from classroom heartbeats; a 20-second refresh keeps them
+    // current with one small query, instead of a realtime feed of every
+    // heartbeat on the platform.
+    const timer = window.setInterval(() => void load(), 20_000);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
-      window.clearTimeout(reloadTimer);
-      void supabase.removeChannel(channel);
     };
   }, []);
 
